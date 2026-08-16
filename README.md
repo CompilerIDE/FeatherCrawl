@@ -27,7 +27,9 @@ FeatherCrawl 是一款融合了 **WinHTTP** 的高效网络请求与 **Miniblink
 
 ## 开源许可证
 
-Apache License 2.0
+FeatherCrawl 使用 [Apache License 2.0](LICENSE) 开源。
+
+本项目中包含的 **Miniblink M108** 组件同样采用 Apache License 2.0 协议开源，版权归 weolar 所有。项目地址：[https://github.com/weolar/miniblink49](https://github.com/weolar/miniblink49)。
 
 ---
 
