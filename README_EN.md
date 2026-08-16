@@ -30,7 +30,9 @@ FeatherCrawl is a C++ web crawler library that combines the efficient network re
 
 ## License
 
-Apache License 2.0
+FeatherCrawl is licensed under the [Apache License 2.0](LICENSE).
+
+This project includes **Miniblink M108**, which is also open-sourced under the Apache License 2.0, Copyright (c) weolar. Project home: [https://github.com/weolar/miniblink49](https://github.com/weolar/miniblink49).
 
 ---
 
