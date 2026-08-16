@@ -1,4 +1,10 @@
 <h1 align="center">FeatherCrawl</h1>
+
+<p align="center">
+  <a href="README.md">简体中文</a> |
+  <a href="README_EN.md">English</a>
+</p>
+
 <p align="center">
   <a href="https://github.com/CompilerIDE/FeatherCrawl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/CompilerIDE/FeatherCrawl.svg?style=for-the-badge&new=1" alt="License"></a>
   <br>
