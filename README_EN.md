@@ -10,30 +10,24 @@
   <br>
 </p>
 
-FeatherCrawl is a C++ web crawler library that combines the efficient network request capabilities of **WinHTTP** with the full-featured JavaScript rendering engine of **Miniblink M108**. With just one header file and one DLL, you can perform both static and dynamic web page crawling in C++.
+FeatherCrawl is a C++ network request library built on WinHTTP. It enables web scraping in C++ with a single header file.
 
-**This project is currently under active development.**
+This project is under active development. Contributions and feedback are welcome.
 
 ---
 
 ## Features
 
-- Dual-engine architecture: WinHTTP + Miniblink M108 (Chromium)
-- JavaScript rendering support
-- Headless mode support
-- HTTPS support
-- Simple to use: just `#include "feathercrawl.h"`
-- C++11 and later
-- Natively supported on Windows 10/11
+- Architecture: WinHTTP
+- Simple integration — only `#include "feathercrawl.h"` is required
+- C++11 or later; native support for Windows 10/11
 
 ---
 
 ## License
 
-FeatherCrawl is licensed under the [Apache License 2.0](LICENSE).
-
-This project includes **Miniblink M108**, which is also open-sourced under the Apache License 2.0, Copyright (c) weolar. Project home: [https://github.com/weolar/miniblink49](https://github.com/weolar/miniblink49).
+FeatherCrawl is open source under the [Apache License 2.0](LICENSE).
 
 ---
 
-<h3 align="center">FeatherCrawl — Making C++ web crawling simple and powerful.</h3>
+<h3 align="center">FeatherCrawl — simple and powerful web scraping for C++.</h3>
