@@ -3,28 +3,272 @@
  *  介绍：FeatherCrawl 是由 Eric 开发的一款 C++ 网络库，采用 Apache 2.0 协议开源，适用于 C++11 及以上版本
  *  使用方式：#include "FeatherCrawl.h"
  *  编译：MSVC 可直接编译，MinGW/TDM-GCC 需加入 -lwinhttp 参数
- */
-
+*/
 #pragma once
 
 #include <windows.h>
 #include <winhttp.h>
+
 #include <string>
 #include <vector>
-#include <memory>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
 #include <unordered_map>
+#include <limits>
+#include <climits>
+#include <cctype>
+
+#ifdef _MSC_VER
+#pragma comment(lib, "winhttp.lib")
+#endif
 
 namespace web
 {
+
+namespace detail
+{
+
+inline char ascii_lower(char ch)
+{
+    if (ch >= 'A' && ch <= 'Z')
+    {
+        return static_cast<char>(ch - 'A' + 'a');
+    }
+    return ch;
+}
+
+inline bool ascii_iequals(const std::string& a, const std::string& b)
+{
+    if (a.size() != b.size())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        if (ascii_lower(a[i]) != ascii_lower(b[i]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+inline bool utf8_to_wide(const std::string& src, std::wstring& out)
+{
+    out.clear();
+    if (src.empty())
+    {
+        return true;
+    }
+    if (src.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
+    }
+
+    const int src_len = static_cast<int>(src.size());
+    const int wide_len = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        src.data(),
+        src_len,
+        NULL,
+        0);
+
+    if (wide_len <= 0)
+    {
+        return false;
+    }
+
+    out.assign(static_cast<size_t>(wide_len), L'\0');
+    const int converted = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        src.data(),
+        src_len,
+        &out[0],
+        wide_len);
+
+    if (converted != wide_len)
+    {
+        out.clear();
+        return false;
+    }
+    return true;
+}
+
+inline std::string wide_to_output(const std::wstring& text)
+{
+    if (text.empty())
+    {
+        return "";
+    }
+
+    UINT codepage = GetConsoleOutputCP();
+    if (codepage == 0)
+    {
+        codepage = GetACP();
+    }
+
+    int length = WideCharToMultiByte(
+        codepage,
+        0,
+        text.data(),
+        static_cast<int>(text.size()),
+        NULL,
+        0,
+        NULL,
+        NULL);
+
+    if (length <= 0 && codepage != CP_UTF8)
+    {
+        codepage = CP_UTF8;
+        length = WideCharToMultiByte(
+            codepage,
+            0,
+            text.data(),
+            static_cast<int>(text.size()),
+            NULL,
+            0,
+            NULL,
+            NULL);
+    }
+
+    if (length <= 0)
+    {
+        return "";
+    }
+
+    std::string result(static_cast<size_t>(length), '\0');
+    if (WideCharToMultiByte(
+            codepage,
+            0,
+            text.data(),
+            static_cast<int>(text.size()),
+            &result[0],
+            length,
+            NULL,
+            NULL) != length)
+    {
+        return "";
+    }
+
+    return result;
+}
+
+inline std::string text(const wchar_t* value)
+{
+    return wide_to_output(value ? std::wstring(value) : std::wstring());
+}
+
+inline std::wstring winhttp_error_description(DWORD error_code)
+{
+    switch (error_code)
+    {
+    case ERROR_WINHTTP_TIMEOUT:
+        return L"\u8bf7\u6c42\u8d85\u65f6";
+    case ERROR_WINHTTP_NAME_NOT_RESOLVED:
+        return L"\u65e0\u6cd5\u89e3\u6790\u670d\u52a1\u5668\u540d\u79f0";
+    case ERROR_WINHTTP_CANNOT_CONNECT:
+        return L"\u65e0\u6cd5\u8fde\u63a5\u5230\u670d\u52a1\u5668";
+    case ERROR_WINHTTP_CONNECTION_ERROR:
+        return L"\u4e0e\u670d\u52a1\u5668\u7684\u8fde\u63a5\u53d1\u751f\u9519\u8bef";
+    case ERROR_WINHTTP_SECURE_FAILURE:
+        return L"HTTPS \u5b89\u5168\u8fde\u63a5\u5931\u8d25";
+    case ERROR_WINHTTP_INVALID_URL:
+        return L"URL \u65e0\u6548";
+    case ERROR_WINHTTP_UNRECOGNIZED_SCHEME:
+        return L"\u4e0d\u652f\u6301\u8be5 URL \u534f\u8bae";
+    case ERROR_WINHTTP_LOGIN_FAILURE:
+        return L"\u8eab\u4efd\u9a8c\u8bc1\u5931\u8d25";
+    case ERROR_WINHTTP_OPERATION_CANCELLED:
+        return L"\u64cd\u4f5c\u5df2\u53d6\u6d88";
+    default:
+        return L"WinHTTP \u8bf7\u6c42\u6267\u884c\u5931\u8d25";
+    }
+}
+
+inline std::string winhttp_error(const wchar_t* operation, DWORD error_code)
+{
+    std::wostringstream oss;
+    oss << operation
+        << L"\u5931\u8d25\uff1a"
+        << winhttp_error_description(error_code)
+        << L"\uff08WinHTTP \u9519\u8bef\u7801 "
+        << error_code
+        << L"\uff09";
+    return wide_to_output(oss.str());
+}
+
+inline std::wstring normalize_url_for_crack(const std::wstring& url)
+{
+    const size_t scheme_pos = url.find(L"://");
+    if (scheme_pos == std::wstring::npos)
+    {
+        return url;
+    }
+
+    const size_t authority_start = scheme_pos + 3;
+    const size_t first_delimiter = url.find_first_of(L"/?#", authority_start);
+    if (first_delimiter != std::wstring::npos &&
+        (url[first_delimiter] == L'?' || url[first_delimiter] == L'#'))
+    {
+        std::wstring normalized = url;
+        normalized.insert(first_delimiter, 1, L'/');
+        return normalized;
+    }
+
+    return url;
+}
+
+inline bool valid_header_name(const std::string& name)
+{
+    if (name.empty())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < name.size(); ++i)
+    {
+        const unsigned char c = static_cast<unsigned char>(name[i]);
+        const bool alpha_num =
+            (c >= '0' && c <= '9') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z');
+
+        const bool punctuation =
+            c == '!' || c == '#' || c == '$' || c == '%' || c == '&' ||
+            c == '\'' || c == '*' || c == '+' || c == '-' || c == '.' ||
+            c == '^' || c == '_' || c == '`' || c == '|' || c == '~';
+
+        if (!alpha_num && !punctuation)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+inline bool valid_header_value(const std::string& value)
+{
+    for (size_t i = 0; i < value.size(); ++i)
+    {
+        if (value[i] == '\r' || value[i] == '\n' || value[i] == '\0')
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+} 
 
 struct Response
 {
     int status_code = 0;
     std::string body;
-    std::string error_message;
+    std::string error_message = detail::text(L"\u65e0");
 };
 
 struct Headers
@@ -33,32 +277,127 @@ struct Headers
 
     void set(const std::string& key, const std::string& value)
     {
+        for (auto it = fields.begin(); it != fields.end(); ++it)
+        {
+            if (detail::ascii_iequals(it->first, key))
+            {
+                it->second = value;
+                return;
+            }
+        }
         fields[key] = value;
     }
 
     std::string get(const std::string& key) const
     {
-        auto it = fields.find(key);
-        return (it != fields.end()) ? it->second : "";
+        for (auto it = fields.begin(); it != fields.end(); ++it)
+        {
+            if (detail::ascii_iequals(it->first, key))
+            {
+                return it->second;
+            }
+        }
+        return "";
     }
 
     std::string to_winhttp_string() const
     {
         std::string result;
-        for (const auto& pair : fields)
+        for (auto it = fields.begin(); it != fields.end(); ++it)
         {
-            result += pair.first + ": " + pair.second + "\r\n";
+            result += it->first;
+            result += ": ";
+            result += it->second;
+            result += "\r\n";
         }
         return result;
     }
 };
+
+namespace detail
+{
+
+inline bool headers_contains(const Headers& headers, const std::string& key)
+{
+    for (auto it = headers.fields.begin(); it != headers.fields.end(); ++it)
+    {
+        if (ascii_iequals(it->first, key))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline bool validate_headers(const Headers& headers, std::string& error)
+{
+    for (auto it = headers.fields.begin(); it != headers.fields.end(); ++it)
+    {
+        if (!valid_header_name(it->first))
+        {
+            error = detail::text(L"\u65e0\u6548\u7684 HTTP \u8bf7\u6c42\u5934\u540d\u79f0\uff1a") + it->first;
+            return false;
+        }
+        if (!valid_header_value(it->second))
+        {
+            error = detail::text(L"HTTP \u8bf7\u6c42\u5934\u7684\u503c\u65e0\u6548\uff1a") + it->first;
+            return false;
+        }
+    }
+    return true;
+}
+
+inline Response make_error_response(const std::string& message)
+{
+    Response resp;
+    resp.error_message = message;
+    return resp;
+}
+
+inline bool is_retryable_http_status(int status_code)
+{
+    switch (status_code)
+    {
+    case 408: 
+    case 425: 
+    case 429: 
+    case 500: 
+    case 502: 
+    case 503: 
+    case 504: 
+        return true;
+    default:
+        return false;
+    }
+}
+
+inline std::string http_error_message(int status_code)
+{
+    std::ostringstream oss;
+    oss << detail::text(L"HTTP \u8bf7\u6c42\u5931\u8d25\uff0c\u72b6\u6001\u7801 ") << status_code;
+    return oss.str();
+}
+
+inline void retry_delay(unsigned long long attempt_index)
+{
+    
+    
+    unsigned long long delay_ms = 200ULL * (attempt_index + 1ULL);
+    if (delay_ms > 1000ULL)
+    {
+        delay_ms = 1000ULL;
+    }
+    Sleep(static_cast<DWORD>(delay_ms));
+}
+
+} 
 
 class WinHttpHandle
 {
     HINTERNET handle_;
 
 public:
-    WinHttpHandle(HINTERNET h = nullptr) : handle_(h) {}
+    explicit WinHttpHandle(HINTERNET h = nullptr) : handle_(h) {}
 
     ~WinHttpHandle()
     {
@@ -75,15 +414,20 @@ public:
 
     WinHttpHandle(const WinHttpHandle&) = delete;
     WinHttpHandle& operator=(const WinHttpHandle&) = delete;
+
     WinHttpHandle(WinHttpHandle&& other) noexcept : handle_(other.handle_)
     {
         other.handle_ = nullptr;
     }
+
     WinHttpHandle& operator=(WinHttpHandle&& other) noexcept
     {
         if (this != &other)
         {
-            if (handle_) WinHttpCloseHandle(handle_);
+            if (handle_)
+            {
+                WinHttpCloseHandle(handle_);
+            }
             handle_ = other.handle_;
             other.handle_ = nullptr;
         }
@@ -105,225 +449,402 @@ inline Response send_request(
     bool follow_redirect = true,
     int retries = 0)
 {
-    Response resp;
-
-    URL_COMPONENTS urlComp = { sizeof(URL_COMPONENTS) };
-    urlComp.dwHostNameLength = 1;
-    urlComp.dwUrlPathLength = 1;
-    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &urlComp))
+    if (method.empty())
     {
-        resp.error_message = "Invalid URL";
-        return resp;
+        return detail::make_error_response(detail::text(L"HTTP \u65b9\u6cd5\u4e0d\u80fd\u4e3a\u7a7a"));
+    }
+    if (url.empty())
+    {
+        return detail::make_error_response(detail::text(L"URL \u4e0d\u80fd\u4e3a\u7a7a"));
+    }
+    if (timeout_ms < 0)
+    {
+        return detail::make_error_response(detail::text(L"timeout_ms \u4e0d\u80fd\u5c0f\u4e8e 0"));
+    }
+    if (retries < 0)
+    {
+        return detail::make_error_response(detail::text(L"retries \u4e0d\u80fd\u5c0f\u4e8e 0"));
+    }
+    if (url.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return detail::make_error_response(detail::text(L"URL \u8fc7\u957f\uff0c\u8d85\u51fa WinHTTP \u53ef\u5904\u7406\u8303\u56f4"));
+    }
+    if (body.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return detail::make_error_response(detail::text(L"\u8bf7\u6c42\u4f53\u8fc7\u5927\uff0c\u8d85\u51fa\u5f53\u524d FeatherCrawl API \u53ef\u5904\u7406\u8303\u56f4"));
     }
 
-    std::wstring host(urlComp.lpszHostName, urlComp.dwHostNameLength);
-    std::wstring path(urlComp.lpszUrlPath, urlComp.dwUrlPathLength);
+    std::string header_validation_error;
+    if (!detail::validate_headers(headers, header_validation_error))
+    {
+        return detail::make_error_response(header_validation_error);
+    }
+
+    const std::wstring normalized_url = detail::normalize_url_for_crack(url);
+    if (normalized_url.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return detail::make_error_response(detail::text(L"URL \u8fc7\u957f\uff0c\u8d85\u51fa WinHTTP \u53ef\u5904\u7406\u8303\u56f4"));
+    }
+
+    URL_COMPONENTS url_comp = {};
+    url_comp.dwStructSize = static_cast<DWORD>(sizeof(url_comp));
+    url_comp.dwHostNameLength = 1;
+    url_comp.dwUrlPathLength = 1;
+    url_comp.dwExtraInfoLength = 1;
+
+    if (!WinHttpCrackUrl(
+            normalized_url.c_str(),
+            static_cast<DWORD>(normalized_url.size()),
+            0,
+            &url_comp))
+    {
+        const DWORD error_code = GetLastError();
+        return detail::make_error_response(detail::winhttp_error(L"\u89e3\u6790 URL", error_code));
+    }
+
+    if (url_comp.nScheme != INTERNET_SCHEME_HTTP &&
+        url_comp.nScheme != INTERNET_SCHEME_HTTPS)
+    {
+        return detail::make_error_response(detail::text(L"\u4ec5\u652f\u6301 HTTP \u548c HTTPS URL"));
+    }
+    if (url_comp.lpszHostName == NULL || url_comp.dwHostNameLength == 0)
+    {
+        return detail::make_error_response(detail::text(L"URL \u4e2d\u6ca1\u6709\u6709\u6548\u7684\u670d\u52a1\u5668\u5730\u5740"));
+    }
+
+    std::wstring host(url_comp.lpszHostName, url_comp.dwHostNameLength);
+    std::wstring path;
+
+    if (url_comp.lpszUrlPath != NULL && url_comp.dwUrlPathLength > 0)
+    {
+        path.assign(url_comp.lpszUrlPath, url_comp.dwUrlPathLength);
+    }
     if (path.empty())
     {
         path = L"/";
     }
 
-    for (int attempt = 0; attempt <= retries; ++attempt)
+    if (url_comp.lpszExtraInfo != NULL && url_comp.dwExtraInfoLength > 0)
     {
-        WinHttpHandle session(WinHttpOpen(L"FeatherCrawl/1.0",
-                                          WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                                          WINHTTP_NO_PROXY_NAME,
-                                          WINHTTP_NO_PROXY_BYPASS, 0));
+        std::wstring extra(url_comp.lpszExtraInfo, url_comp.dwExtraInfoLength);
+        const size_t fragment_pos = extra.find(L'#');
+        if (fragment_pos != std::wstring::npos)
+        {
+            extra.erase(fragment_pos);
+        }
+        if (!extra.empty())
+        {
+            path += extra;
+        }
+    }
+
+    std::wstring wide_headers;
+    const std::string header_string = headers.to_winhttp_string();
+    if (!header_string.empty() && !detail::utf8_to_wide(header_string, wide_headers))
+    {
+        return detail::make_error_response(detail::text(L"HTTP \u8bf7\u6c42\u5934\u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u7f16\u7801"));
+    }
+
+    const DWORD total_len = static_cast<DWORD>(body.size());
+    const unsigned long long max_attempts = static_cast<unsigned long long>(retries) + 1ULL;
+    std::string last_error = detail::text(L"\u8bf7\u6c42\u5931\u8d25");
+
+    for (unsigned long long attempt = 0; attempt < max_attempts; ++attempt)
+    {
+        WinHttpHandle session(WinHttpOpen(
+            L"FeatherCrawl/1.0",
+            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+            WINHTTP_NO_PROXY_NAME,
+            WINHTTP_NO_PROXY_BYPASS,
+            0));
+
         if (!session)
         {
-            resp.error_message = "WinHttpOpen failed";
+            last_error = detail::winhttp_error(L"\u6253\u5f00 WinHTTP \u4f1a\u8bdd", GetLastError());
+            if (attempt + 1ULL < max_attempts)
+            {
+                detail::retry_delay(attempt);
+            }
             continue;
         }
 
-        WinHttpHandle connect(WinHttpConnect(session.get(), host.c_str(), urlComp.nPort, 0));
+        WinHttpHandle connect(WinHttpConnect(
+            session.get(),
+            host.c_str(),
+            url_comp.nPort,
+            0));
+
         if (!connect)
         {
-            resp.error_message = "WinHttpConnect failed";
+            last_error = detail::winhttp_error(L"\u8fde\u63a5\u670d\u52a1\u5668", GetLastError());
+            if (attempt + 1ULL < max_attempts)
+            {
+                detail::retry_delay(attempt);
+            }
             continue;
         }
 
-        DWORD flags = (urlComp.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
-        WinHttpHandle request(WinHttpOpenRequest(connect.get(),
-                                                 method.c_str(),
-                                                 path.c_str(),
-                                                 NULL,
-                                                 WINHTTP_NO_REFERER,
-                                                 WINHTTP_DEFAULT_ACCEPT_TYPES,
-                                                 flags));
+        DWORD flags = 0;
+        if (url_comp.nScheme == INTERNET_SCHEME_HTTPS)
+        {
+            flags |= WINHTTP_FLAG_SECURE;
+        }
+
+        WinHttpHandle request(WinHttpOpenRequest(
+            connect.get(),
+            method.c_str(),
+            path.c_str(),
+            NULL,
+            WINHTTP_NO_REFERER,
+            WINHTTP_DEFAULT_ACCEPT_TYPES,
+            flags));
+
         if (!request)
         {
-            resp.error_message = "WinHttpOpenRequest failed";
+            last_error = detail::winhttp_error(L"\u521b\u5efa HTTP \u8bf7\u6c42", GetLastError());
+            if (attempt + 1ULL < max_attempts)
+            {
+                detail::retry_delay(attempt);
+            }
             continue;
         }
 
         if (timeout_ms > 0)
         {
-            if (!WinHttpSetTimeouts(request.get(), timeout_ms, timeout_ms, timeout_ms, timeout_ms))
+            if (!WinHttpSetTimeouts(
+                    request.get(),
+                    timeout_ms,
+                    timeout_ms,
+                    timeout_ms,
+                    timeout_ms))
             {
-                resp.error_message = "WinHttpSetTimeouts failed";
-                continue;
+                return detail::make_error_response(
+                    detail::winhttp_error(L"\u8bbe\u7f6e\u8d85\u65f6\u65f6\u95f4", GetLastError()));
             }
         }
 
-        if (follow_redirect)
+        DWORD redirect_policy = follow_redirect
+            ? WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP
+            : WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+
+        if (!WinHttpSetOption(
+                request.get(),
+                WINHTTP_OPTION_REDIRECT_POLICY,
+                &redirect_policy,
+                sizeof(redirect_policy)))
         {
-            DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS;
-            if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy)))
+            return detail::make_error_response(
+                detail::winhttp_error(L"\u8bbe\u7f6e\u91cd\u5b9a\u5411\u7b56\u7565", GetLastError()));
+        }
+
+        if (!wide_headers.empty())
+        {
+            if (wide_headers.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
             {
-                resp.error_message = "WinHttpSetOption (redirect) failed";
-                continue;
+                return detail::make_error_response(detail::text(L"HTTP \u8bf7\u6c42\u5934\u8fc7\u5927\uff0c\u8d85\u51fa WinHTTP \u53ef\u5904\u7406\u8303\u56f4"));
+            }
+
+            if (!WinHttpAddRequestHeaders(
+                    request.get(),
+                    wide_headers.c_str(),
+                    static_cast<DWORD>(wide_headers.size()),
+                    WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE))
+            {
+                return detail::make_error_response(
+                    detail::winhttp_error(L"\u6dfb\u52a0 HTTP \u8bf7\u6c42\u5934", GetLastError()));
             }
         }
 
-        std::string header_str = headers.to_winhttp_string();
-        if (!header_str.empty())
+        LPVOID optional_data = WINHTTP_NO_REQUEST_DATA;
+        if (total_len > 0)
         {
-            int wide_len = MultiByteToWideChar(CP_UTF8, 0, header_str.c_str(), -1, nullptr, 0);
-            std::wstring wide_headers(wide_len, 0);
-            MultiByteToWideChar(CP_UTF8, 0, header_str.c_str(), -1, &wide_headers[0], wide_len);
-            if (!WinHttpAddRequestHeaders(request.get(), wide_headers.c_str(), (DWORD)-1L,
-                                          WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE))
-            {
-                resp.error_message = "WinHttpAddRequestHeaders failed";
-                continue;
-            }
+            optional_data = const_cast<char*>(body.data());
         }
 
-        DWORD total_len = (DWORD)body.size();
-
-        if (!WinHttpSendRequest(request.get(),
-                                WINHTTP_NO_ADDITIONAL_HEADERS,
-                                0,
-                                WINHTTP_NO_REQUEST_DATA,
-                                0,
-                                total_len,
-                                0))
+        if (!WinHttpSendRequest(
+                request.get(),
+                WINHTTP_NO_ADDITIONAL_HEADERS,
+                0,
+                optional_data,
+                total_len,
+                total_len,
+                0))
         {
-            resp.error_message = "WinHttpSendRequest failed";
+            last_error = detail::winhttp_error(L"\u53d1\u9001 HTTP \u8bf7\u6c42", GetLastError());
+            if (attempt + 1ULL < max_attempts)
+            {
+                detail::retry_delay(attempt);
+            }
             continue;
-        }
-
-        if (method == L"POST" && total_len > 0)
-        {
-            DWORD bytes_written = 0;
-            if (!WinHttpWriteData(request.get(), body.c_str(), total_len, &bytes_written))
-            {
-                resp.error_message = "WinHttpWriteData failed";
-                continue;
-            }
-            if (bytes_written != total_len)
-            {
-                resp.error_message = "WinHttpWriteData incomplete";
-                continue;
-            }
         }
 
         if (!WinHttpReceiveResponse(request.get(), NULL))
         {
-            resp.error_message = "WinHttpReceiveResponse failed";
+            last_error = detail::winhttp_error(L"\u63a5\u6536\u670d\u52a1\u5668\u54cd\u5e94", GetLastError());
+            if (attempt + 1ULL < max_attempts)
+            {
+                detail::retry_delay(attempt);
+            }
             continue;
         }
 
         DWORD status_code = 0;
-        DWORD size = sizeof(status_code);
-        if (WinHttpQueryHeaders(request.get(),
-                                WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                                WINHTTP_HEADER_NAME_BY_INDEX,
-                                &status_code, &size, WINHTTP_NO_HEADER_INDEX))
+        DWORD status_size = sizeof(status_code);
+        if (!WinHttpQueryHeaders(
+                request.get(),
+                WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                WINHTTP_HEADER_NAME_BY_INDEX,
+                &status_code,
+                &status_size,
+                WINHTTP_NO_HEADER_INDEX))
         {
-            resp.status_code = static_cast<int>(status_code);
-        }
-        else
-        {
-            resp.error_message = "WinHttpQueryHeaders failed";
+            last_error = detail::winhttp_error(L"\u8bfb\u53d6 HTTP \u72b6\u6001\u7801", GetLastError());
+            if (attempt + 1ULL < max_attempts)
+            {
+                detail::retry_delay(attempt);
+            }
             continue;
         }
 
-        std::vector<char> buffer;
-        DWORD bytes_read = 0;
-        do
+        Response current;
+        current.status_code = static_cast<int>(status_code);
+
+        bool read_failed = false;
+        for (;;)
         {
-            char chunk[4096];
-            if (WinHttpReadData(request.get(), chunk, sizeof(chunk), &bytes_read))
+            char chunk[8192];
+            DWORD bytes_read = 0;
+
+            if (!WinHttpReadData(request.get(), chunk, sizeof(chunk), &bytes_read))
             {
-                if (bytes_read > 0)
-                {
-                    buffer.insert(buffer.end(), chunk, chunk + bytes_read);
-                }
-            }
-            else
-            {
-                resp.error_message = "WinHttpReadData failed";
+                last_error = detail::winhttp_error(L"\u8bfb\u53d6\u54cd\u5e94\u6570\u636e", GetLastError());
+                read_failed = true;
                 break;
             }
-        } while (bytes_read > 0);
 
-        if (!buffer.empty())
-        {
-            resp.body.assign(buffer.data(), buffer.size());
+            if (bytes_read == 0)
+            {
+                break;
+            }
+
+            current.body.append(chunk, static_cast<size_t>(bytes_read));
         }
 
-        resp.error_message.clear();
-        return resp;
+        if (read_failed)
+        {
+            if (attempt + 1ULL < max_attempts)
+            {
+                detail::retry_delay(attempt);
+            }
+            continue;
+        }
+
+        
+        
+        
+        if (current.status_code >= 400)
+        {
+            current.error_message = detail::http_error_message(current.status_code);
+        }
+        else
+        {
+            current.error_message = detail::text(L"\u65e0");
+        }
+
+        
+        
+        
+        if (detail::is_retryable_http_status(current.status_code) &&
+            attempt + 1ULL < max_attempts)
+        {
+            detail::retry_delay(attempt);
+            continue;
+        }
+
+        if (detail::is_retryable_http_status(current.status_code) &&
+            max_attempts > 1ULL)
+        {
+            std::ostringstream oss;
+            oss << current.error_message
+                << detail::text(L"\uff0c\u5df2\u5c1d\u8bd5 ")
+                << max_attempts
+                << detail::text(L" \u6b21");
+            current.error_message = oss.str();
+        }
+
+        return current;
     }
 
-    if (resp.error_message.empty())
+    Response resp;
+    resp.error_message = last_error;
+    if (max_attempts > 1)
     {
-        resp.error_message = "All retries failed";
+        std::ostringstream oss;
+        oss << resp.error_message
+            << detail::text(L"\uff0c\u5df2\u5c1d\u8bd5 ")
+            << max_attempts
+            << detail::text(L" \u6b21");
+        resp.error_message = oss.str();
     }
     return resp;
 }
 
-inline Response get(const std::wstring& url,
-                    const Headers& headers = Headers(),
-                    int timeout_ms = 0,
-                    bool follow_redirect = true,
-                    int retries = 0)
+inline Response get(
+    const std::wstring& url,
+    const Headers& headers = Headers(),
+    int timeout_ms = 0,
+    bool follow_redirect = true,
+    int retries = 0)
 {
     return send_request(L"GET", url, "", headers, timeout_ms, follow_redirect, retries);
 }
 
-inline Response get(const std::string& url_utf8,
-                    const Headers& headers = Headers(),
-                    int timeout_ms = 0,
-                    bool follow_redirect = true,
-                    int retries = 0)
+inline Response get(
+    const std::string& url_utf8,
+    const Headers& headers = Headers(),
+    int timeout_ms = 0,
+    bool follow_redirect = true,
+    int retries = 0)
 {
-    int len = MultiByteToWideChar(CP_UTF8, 0, url_utf8.c_str(), -1, nullptr, 0);
-    std::wstring wurl(len, 0);
-    MultiByteToWideChar(CP_UTF8, 0, url_utf8.c_str(), -1, &wurl[0], len);
-    wurl.pop_back();
+    std::wstring wurl;
+    if (!detail::utf8_to_wide(url_utf8, wurl))
+    {
+        return detail::make_error_response(detail::text(L"URL \u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u7f16\u7801"));
+    }
     return get(wurl, headers, timeout_ms, follow_redirect, retries);
 }
 
-inline Response post(const std::wstring& url,
-                     const std::string& body,
-                     const std::string& content_type = "application/x-www-form-urlencoded",
-                     const Headers& headers = Headers(),
-                     int timeout_ms = 0,
-                     bool follow_redirect = true,
-                     int retries = 0)
+inline Response post(
+    const std::wstring& url,
+    const std::string& body,
+    const std::string& content_type = "application/x-www-form-urlencoded",
+    const Headers& headers = Headers(),
+    int timeout_ms = 0,
+    bool follow_redirect = true,
+    int retries = 0)
 {
     Headers h = headers;
-    if (h.fields.find("Content-Type") == h.fields.end())
+    if (!detail::headers_contains(h, "Content-Type"))
     {
         h.set("Content-Type", content_type);
     }
     return send_request(L"POST", url, body, h, timeout_ms, follow_redirect, retries);
 }
 
-inline Response post(const std::string& url_utf8,
-                     const std::string& body,
-                     const std::string& content_type = "application/x-www-form-urlencoded",
-                     const Headers& headers = Headers(),
-                     int timeout_ms = 0,
-                     bool follow_redirect = true,
-                     int retries = 0)
+inline Response post(
+    const std::string& url_utf8,
+    const std::string& body,
+    const std::string& content_type = "application/x-www-form-urlencoded",
+    const Headers& headers = Headers(),
+    int timeout_ms = 0,
+    bool follow_redirect = true,
+    int retries = 0)
 {
-    int len = MultiByteToWideChar(CP_UTF8, 0, url_utf8.c_str(), -1, nullptr, 0);
-    std::wstring wurl(len, 0);
-    MultiByteToWideChar(CP_UTF8, 0, url_utf8.c_str(), -1, &wurl[0], len);
-    wurl.pop_back();
+    std::wstring wurl;
+    if (!detail::utf8_to_wide(url_utf8, wurl))
+    {
+        return detail::make_error_response(detail::text(L"URL \u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u7f16\u7801"));
+    }
     return post(wurl, body, content_type, headers, timeout_ms, follow_redirect, retries);
 }
 
@@ -333,20 +854,68 @@ inline std::string to_utf8(const std::string& src, int codepage)
     {
         return {};
     }
-    int len = MultiByteToWideChar(codepage, 0, src.c_str(), (int)src.size(), nullptr, 0);
-    if (len == 0)
+    if (src.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
     {
         return src;
     }
-    std::wstring wstr(len, 0);
-    MultiByteToWideChar(codepage, 0, src.c_str(), (int)src.size(), &wstr[0], len);
-    int utf8_len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), len, nullptr, 0, nullptr, nullptr);
-    if (utf8_len == 0)
+
+    const int src_len = static_cast<int>(src.size());
+    const DWORD flags = (codepage == CP_UTF8) ? MB_ERR_INVALID_CHARS : 0;
+
+    const int wide_len = MultiByteToWideChar(
+        codepage,
+        flags,
+        src.data(),
+        src_len,
+        NULL,
+        0);
+
+    if (wide_len <= 0)
     {
         return src;
     }
-    std::string utf8(utf8_len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), len, &utf8[0], utf8_len, nullptr, nullptr);
+
+    std::wstring wstr(static_cast<size_t>(wide_len), L'\0');
+    if (MultiByteToWideChar(
+            codepage,
+            flags,
+            src.data(),
+            src_len,
+            &wstr[0],
+            wide_len) != wide_len)
+    {
+        return src;
+    }
+
+    const int utf8_len = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        wstr.data(),
+        wide_len,
+        NULL,
+        0,
+        NULL,
+        NULL);
+
+    if (utf8_len <= 0)
+    {
+        return src;
+    }
+
+    std::string utf8(static_cast<size_t>(utf8_len), '\0');
+    if (WideCharToMultiByte(
+            CP_UTF8,
+            0,
+            wstr.data(),
+            wide_len,
+            &utf8[0],
+            utf8_len,
+            NULL,
+            NULL) != utf8_len)
+    {
+        return src;
+    }
+
     return utf8;
 }
 
@@ -354,16 +923,27 @@ inline std::string to_utf8(const std::string& src, const std::string& encoding)
 {
     static const std::unordered_map<std::string, int> codepage_map =
     {
-        {"UTF-8",      CP_UTF8},
-        {"GBK",        936},
-        {"GB2312",     936},
-        {"BIG5",       950},
-        {"SHIFT-JIS",  932},
-        {"EUC-KR",     949},
-        {"ISO-8859-1", 28591},
+        {"UTF-8",        CP_UTF8},
+        {"GBK",          936},
+        {"GB2312",       936},
+        {"BIG5",         950},
+        {"SHIFT-JIS",    932},
+        {"EUC-KR",       949},
+        {"ISO-8859-1",   28591},
         {"WINDOWS-1252", 1252},
     };
-    auto it = codepage_map.find(encoding);
+
+    std::string normalized = encoding;
+    std::transform(
+        normalized.begin(),
+        normalized.end(),
+        normalized.begin(),
+        [](unsigned char c) -> char
+        {
+            return static_cast<char>(std::toupper(c));
+        });
+
+    auto it = codepage_map.find(normalized);
     if (it != codepage_map.end())
     {
         return to_utf8(src, it->second);
@@ -379,7 +959,15 @@ inline std::string text_size(size_t bytes, const std::string& unit = "")
     if (!unit.empty())
     {
         std::string u = unit;
-        std::transform(u.begin(), u.end(), u.begin(), ::toupper);
+        std::transform(
+            u.begin(),
+            u.end(),
+            u.begin(),
+            [](unsigned char c) -> char
+            {
+                return static_cast<char>(std::toupper(c));
+            });
+
         if (u == "B")
         {
             unit_index = 0;
@@ -407,7 +995,7 @@ inline std::string text_size(size_t bytes, const std::string& unit = "")
 
     if (unit_index >= 0 && unit_index <= 3)
     {
-        for (int i = 0; i < unit_index; i++)
+        for (int i = 0; i < unit_index; ++i)
         {
             size /= 1024.0;
         }
@@ -418,7 +1006,7 @@ inline std::string text_size(size_t bytes, const std::string& unit = "")
         while (size >= 1024.0 && chosen_index < 3)
         {
             size /= 1024.0;
-            chosen_index++;
+            ++chosen_index;
         }
     }
 
@@ -445,8 +1033,13 @@ inline std::string lines(const std::string& str, size_t start_line, size_t end_l
     std::vector<std::string> lines_vec;
     std::istringstream stream(str);
     std::string line;
+
     while (std::getline(stream, line))
     {
+        if (!line.empty() && line.back() == '\r')
+        {
+            line.pop_back();
+        }
         lines_vec.push_back(line);
     }
 
@@ -464,7 +1057,7 @@ inline std::string lines(const std::string& str, size_t start_line, size_t end_l
     }
 
     std::ostringstream result;
-    for (size_t i = start_line - 1; i < end_line; i++)
+    for (size_t i = start_line - 1; i < end_line; ++i)
     {
         result << lines_vec[i];
         if (i != end_line - 1)
@@ -475,4 +1068,4 @@ inline std::string lines(const std::string& str, size_t start_line, size_t end_l
     return result.str();
 }
 
-} // namespace web
+} 
