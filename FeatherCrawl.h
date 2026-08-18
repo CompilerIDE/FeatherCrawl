@@ -4,6 +4,7 @@
  *  使用方式：#include "FeatherCrawl.h"
  *  编译：MSVC 可直接编译，MinGW/TDM-GCC 需加入 -lwinhttp 参数
 */
+
 #pragma once
 
 #include <windows.h>
@@ -48,7 +49,7 @@ inline wchar_t ascii_lower(wchar_t ch)
 inline std::string ascii_lower_copy(const std::string& value)
 {
     std::string result = value;
-    for (size_t i = 0; i < result.size(); i++)
+    for (size_t i = 0; i < result.size(); ++i)
     {
         result[i] = ascii_lower(result[i]);
     }
@@ -58,7 +59,7 @@ inline std::string ascii_lower_copy(const std::string& value)
 inline std::wstring ascii_lower_copy(const std::wstring& value)
 {
     std::wstring result = value;
-    for (size_t i = 0; i < result.size(); i++)
+    for (size_t i = 0; i < result.size(); ++i)
     {
         result[i] = ascii_lower(result[i]);
     }
@@ -71,7 +72,7 @@ inline bool ascii_iequals(const std::string& a, const std::string& b)
     {
         return false;
     }
-    for (size_t i = 0; i < a.size(); i++)
+    for (size_t i = 0; i < a.size(); ++i)
     {
         if (ascii_lower(a[i]) != ascii_lower(b[i]))
         {
@@ -87,7 +88,7 @@ inline bool ascii_iequals(const std::wstring& a, const std::wstring& b)
     {
         return false;
     }
-    for (size_t i = 0; i < a.size(); i++)
+    for (size_t i = 0; i < a.size(); ++i)
     {
         if (ascii_lower(a[i]) != ascii_lower(b[i]))
         {
@@ -193,7 +194,10 @@ inline void ensure_utf8_console()
     static std::once_flag once;
     std::call_once(once, []()
     {
-        if (GetConsoleOutputCP() != CP_UTF8) SetConsoleOutputCP(CP_UTF8);
+        if (GetConsoleOutputCP() != CP_UTF8)
+        {
+            SetConsoleOutputCP(CP_UTF8);
+        }
     });
 }
 
@@ -208,7 +212,10 @@ inline void secure_clear(std::string& value)
     if (!value.empty())
     {
         volatile char* p = &value[0];
-        for (size_t i = 0; i < value.size(); ++i) p[i] = 0;
+        for (size_t i = 0; i < value.size(); ++i)
+        {
+            p[i] = 0;
+        }
     }
     value.clear();
 }
@@ -217,8 +224,18 @@ class SecureStringGuard
 {
     std::string* value_;
 public:
-    explicit SecureStringGuard(std::string& value) : value_(&value) {}
-    ~SecureStringGuard() { if (value_) secure_clear(*value_); }
+    explicit SecureStringGuard(std::string& value) : value_(&value)
+    {
+
+        }
+    ~SecureStringGuard()
+    {
+         if (value_)
+    {
+        secure_clear(*value_);
+    }
+
+    }
     SecureStringGuard(const SecureStringGuard&) = delete;
     SecureStringGuard& operator=(const SecureStringGuard&) = delete;
 };
@@ -291,14 +308,38 @@ inline std::string normalize_encoding_name(const std::string& encoding)
 inline bool encoding_to_codepage(const std::string& encoding, UINT& codepage)
 {
     std::string value = normalize_encoding_name(encoding);
-    if (value == "utf-8" || value == "utf8") { codepage = CP_UTF8; return true; }
-    if (value == "gbk" || value == "gb2312" || value == "cp936") { codepage = 936; return true; }
-    if (value == "gb18030" || value == "cp54936") { codepage = 54936; return true; }
-    if (value == "big5" || value == "big-5" || value == "cp950") { codepage = 950; return true; }
-    if (value == "shift-jis" || value == "shiftjis" || value == "sjis" || value == "cp932") { codepage = 932; return true; }
-    if (value == "euc-kr" || value == "cp949") { codepage = 949; return true; }
-    if (value == "iso-8859-1" || value == "latin1" || value == "latin-1") { codepage = 28591; return true; }
-    if (value == "windows-1252" || value == "cp1252") { codepage = 1252; return true; }
+    if (value == "utf-8" || value == "utf8")
+    {
+         codepage = CP_UTF8; return true;
+    }
+    if (value == "gbk" || value == "gb2312" || value == "cp936")
+    {
+         codepage = 936; return true;
+    }
+    if (value == "gb18030" || value == "cp54936")
+    {
+         codepage = 54936; return true;
+    }
+    if (value == "big5" || value == "big-5" || value == "cp950")
+    {
+         codepage = 950; return true;
+    }
+    if (value == "shift-jis" || value == "shiftjis" || value == "sjis" || value == "cp932")
+    {
+         codepage = 932; return true;
+    }
+    if (value == "euc-kr" || value == "cp949")
+    {
+         codepage = 949; return true;
+    }
+    if (value == "iso-8859-1" || value == "latin1" || value == "latin-1")
+    {
+         codepage = 28591; return true;
+    }
+    if (value == "windows-1252" || value == "cp1252")
+    {
+         codepage = 1252; return true;
+    }
     return false;
 }
 
@@ -309,20 +350,38 @@ inline std::string extract_charset(const std::string& source)
     while ((pos = lower.find("charset", pos)) != std::string::npos)
     {
         size_t p = pos + 7;
-        while (p < lower.size() && std::isspace(static_cast<unsigned char>(lower[p]))) ++p;
-        if (p >= lower.size() || lower[p] != '=') { pos = p; continue; }
+        while (p < lower.size() && std::isspace(static_cast<unsigned char>(lower[p])))
+        {
+            ++p;
+        }
+        if (p >= lower.size() || lower[p] != '=')
+        {
+             pos = p; continue;
+        }
         ++p;
-        while (p < source.size() && std::isspace(static_cast<unsigned char>(source[p]))) ++p;
-        if (p >= source.size()) return "";
+        while (p < source.size() && std::isspace(static_cast<unsigned char>(source[p])))
+        {
+            ++p;
+        }
+        if (p >= source.size())
+        {
+            return "";
+        }
         char quote = 0;
-        if (source[p] == '"' || source[p] == '\'') { quote = source[p]; ++p; }
+        if (source[p] == '"' || source[p] == '\'')
+        {
+             quote = source[p]; ++p;
+        }
         size_t start = p;
         while (p < source.size())
         {
             unsigned char ch = static_cast<unsigned char>(source[p]);
             if (quote != 0)
             {
-                if (source[p] == quote) break;
+                if (source[p] == quote)
+                {
+                    break;
+                }
             }
             else if (std::isspace(ch) || source[p] == ';' || source[p] == '>' || source[p] == '/')
             {
@@ -330,7 +389,10 @@ inline std::string extract_charset(const std::string& source)
             }
             ++p;
         }
-        if (p > start) return source.substr(start, p - start);
+        if (p > start)
+        {
+            return source.substr(start, p - start);
+        }
         pos = p + 1;
     }
     return "";
@@ -350,18 +412,33 @@ inline bool is_json_content_type(const std::string& content_type)
 
 inline bool is_text_content_type(const std::string& content_type)
 {
-    if (content_type.empty()) return false;
+    if (content_type.empty())
+    {
+        return false;
+    }
     std::string value = ascii_lower_copy(content_type);
     return value.find("text/") == 0 || value.find("application/json") != std::string::npos || value.find("+json") != std::string::npos || value.find("application/xml") != std::string::npos || value.find("+xml") != std::string::npos || value.find("application/javascript") != std::string::npos || value.find("application/x-javascript") != std::string::npos || value.find("application/x-www-form-urlencoded") != std::string::npos || value.find("application/graphql") != std::string::npos;
 }
 
 inline bool looks_like_text(const std::string& body)
 {
-    if (body.empty()) return false;
+    if (body.empty())
+    {
+        return false;
+    }
     size_t i = 0;
-    if (body.size() >= 3 && static_cast<unsigned char>(body[0]) == 0xEF && static_cast<unsigned char>(body[1]) == 0xBB && static_cast<unsigned char>(body[2]) == 0xBF) i = 3;
-    while (i < body.size() && std::isspace(static_cast<unsigned char>(body[i]))) ++i;
-    if (i >= body.size()) return true;
+    if (body.size() >= 3 && static_cast<unsigned char>(body[0]) == 0xEF && static_cast<unsigned char>(body[1]) == 0xBB && static_cast<unsigned char>(body[2]) == 0xBF)
+    {
+        i = 3;
+    }
+    while (i < body.size() && std::isspace(static_cast<unsigned char>(body[i])))
+    {
+        ++i;
+    }
+    if (i >= body.size())
+    {
+        return true;
+    }
     char c = body[i];
     return c == '<' || c == '{' || c == '[' || c == '"' || c == '\'';
 }
@@ -370,12 +447,21 @@ inline bool prepare_request_body(const std::string& body, const std::string& con
 {
     prepared = body;
     error.clear();
-    if (body.empty() || !is_text_content_type(content_type)) return true;
+    if (body.empty() || !is_text_content_type(content_type))
+    {
+        return true;
+    }
     if (is_json_content_type(content_type))
     {
-        if (is_valid_utf8(body)) return true;
+        if (is_valid_utf8(body))
+        {
+            return true;
+        }
         UINT acp = GetACP();
-        if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared)) return true;
+        if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared))
+        {
+            return true;
+        }
         error = text(L"JSON \u8bf7\u6c42\u4f53\u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u6587\u672c\uff0c\u4e5f\u65e0\u6cd5\u4ece Windows \u5f53\u524d\u7cfb\u7edf\u7f16\u7801\u8f6c\u6362\u4e3a UTF-8");
         return false;
     }
@@ -385,30 +471,57 @@ inline bool prepare_request_body(const std::string& body, const std::string& con
         UINT cp = 0;
         if (encoding_to_codepage(charset, cp))
         {
-            if (cp != CP_UTF8) return true;
-            if (is_valid_utf8(body)) return true;
+            if (cp != CP_UTF8)
+            {
+                return true;
+            }
+            if (is_valid_utf8(body))
+            {
+                return true;
+            }
             UINT acp = GetACP();
-            if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared)) return true;
+            if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared))
+            {
+                return true;
+            }
             error = text(L"\u8bf7\u6c42\u4f53\u58f0\u660e\u4e3a UTF-8\uff0c\u4f46\u6570\u636e\u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u6587\u672c");
             return false;
         }
     }
-    if (is_valid_utf8(body)) return true;
+    if (is_valid_utf8(body))
+    {
+        return true;
+    }
     UINT acp = GetACP();
-    if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared)) return true;
+    if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared))
+    {
+        return true;
+    }
     error = text(L"\u8bf7\u6c42\u4f53\u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u6587\u672c\uff0c\u4e5f\u65e0\u6cd5\u4ece Windows \u5f53\u524d\u7cfb\u7edf\u7f16\u7801\u8f6c\u6362\u4e3a UTF-8");
     return false;
 }
 
 inline std::string normalize_response_body(const std::string& body, const std::string& content_type)
 {
-    if (body.empty()) return body;
-    if (!is_text_content_type(content_type) && !looks_like_text(body)) return body;
+    if (body.empty())
+    {
+        return body;
+    }
+    if (!is_text_content_type(content_type) && !looks_like_text(body))
+    {
+        return body;
+    }
     std::string data = body;
-    if (data.size() >= 3 && static_cast<unsigned char>(data[0]) == 0xEF && static_cast<unsigned char>(data[1]) == 0xBB && static_cast<unsigned char>(data[2]) == 0xBF) data.erase(0, 3);
+    if (data.size() >= 3 && static_cast<unsigned char>(data[0]) == 0xEF && static_cast<unsigned char>(data[1]) == 0xBB && static_cast<unsigned char>(data[2]) == 0xBF)
+    {
+        data.erase(0, 3);
+    }
     if (is_json_content_type(content_type))
     {
-        if (is_valid_utf8(data)) return data;
+        if (is_valid_utf8(data))
+        {
+            return data;
+        }
         UINT acp = GetACP();
         if (acp != 0 && acp != CP_UTF8)
         {
@@ -416,13 +529,19 @@ inline std::string normalize_response_body(const std::string& body, const std::s
             if (bytes_to_wide(data, acp, wide))
             {
                 std::string converted = wide_to_utf8(wide);
-                if (!converted.empty()) return converted;
+                if (!converted.empty())
+                {
+                    return converted;
+                }
             }
         }
         return data;
     }
     std::string charset = extract_charset(content_type);
-    if (charset.empty()) charset = detect_html_charset(data);
+    if (charset.empty())
+    {
+        charset = detect_html_charset(data);
+    }
     UINT source_cp = 0;
     if (!charset.empty() && encoding_to_codepage(charset, source_cp))
     {
@@ -430,10 +549,16 @@ inline std::string normalize_response_body(const std::string& body, const std::s
         if (bytes_to_wide(data, source_cp, wide))
         {
             std::string converted = wide_to_utf8(wide);
-            if (!converted.empty() || data.empty()) return converted;
+            if (!converted.empty() || data.empty())
+            {
+                return converted;
+            }
         }
     }
-    if (is_valid_utf8(data)) return data;
+    if (is_valid_utf8(data))
+    {
+        return data;
+    }
     UINT acp = GetACP();
     if (acp != 0 && acp != CP_UTF8)
     {
@@ -441,7 +566,10 @@ inline std::string normalize_response_body(const std::string& body, const std::s
         if (bytes_to_wide(data, acp, wide))
         {
             std::string converted = wide_to_utf8(wide);
-            if (!converted.empty() || data.empty()) return converted;
+            if (!converted.empty() || data.empty())
+            {
+                return converted;
+            }
         }
     }
     return data;
@@ -450,7 +578,10 @@ inline std::string normalize_response_body(const std::string& body, const std::s
 inline std::wstring normalize_url_for_crack(const std::wstring& url)
 {
     size_t scheme = url.find(L"://");
-    if (scheme == std::wstring::npos) return url;
+    if (scheme == std::wstring::npos)
+    {
+        return url;
+    }
     size_t authority = scheme + 3;
     size_t delimiter = url.find_first_of(L"/?#", authority);
     if (delimiter != std::wstring::npos && (url[delimiter] == L'?' || url[delimiter] == L'#'))
@@ -474,9 +605,13 @@ struct ParsedUrl
     std::wstring absolute;
 };
 
-inline bool parse_url(const std::wstring& input, ParsedUrl& out, std::string& error)
+inline bool parse_url(const std::wstring& input, ParsedUrl& out, std::string& error, bool* unsupported_scheme = NULL)
 {
     error.clear();
+    if (unsupported_scheme)
+    {
+        *unsupported_scheme = false;
+    }
     if (input.empty())
     {
         error = text(L"URL \u4e0d\u80fd\u4e3a\u7a7a");
@@ -503,6 +638,10 @@ inline bool parse_url(const std::wstring& input, ParsedUrl& out, std::string& er
     }
     if (c.nScheme != INTERNET_SCHEME_HTTP && c.nScheme != INTERNET_SCHEME_HTTPS)
     {
+        if (unsupported_scheme)
+        {
+            *unsupported_scheme = true;
+        }
         error = text(L"\u4ec5\u652f\u6301 HTTP \u548c HTTPS URL");
         return false;
     }
@@ -523,19 +662,34 @@ inline bool parse_url(const std::wstring& input, ParsedUrl& out, std::string& er
     out.host = ascii_lower_copy(out.host);
     out.port = c.nPort;
     out.path_only = L"/";
-    if (c.lpszUrlPath && c.dwUrlPathLength > 0) out.path_only.assign(c.lpszUrlPath, c.dwUrlPathLength);
-    if (out.path_only.empty()) out.path_only = L"/";
+    if (c.lpszUrlPath && c.dwUrlPathLength > 0)
+    {
+        out.path_only.assign(c.lpszUrlPath, c.dwUrlPathLength);
+    }
+    if (out.path_only.empty())
+    {
+        out.path_only = L"/";
+    }
     out.path_query = out.path_only;
     if (c.lpszExtraInfo && c.dwExtraInfoLength > 0)
     {
         std::wstring extra(c.lpszExtraInfo, c.dwExtraInfoLength);
         size_t fragment = extra.find(L'#');
-        if (fragment != std::wstring::npos) extra.erase(fragment);
+        if (fragment != std::wstring::npos)
+        {
+            extra.erase(fragment);
+        }
         out.path_query += extra;
     }
     out.absolute = out.scheme_text + L"://";
-    if (out.host.find(L':') != std::wstring::npos) out.absolute += L"[" + out.host + L"]";
-    else out.absolute += out.host;
+    if (out.host.find(L':') != std::wstring::npos)
+    {
+        out.absolute += L"[" + out.host + L"]";
+    }
+    else
+    {
+        out.absolute += out.host;
+    }
     bool default_port = (out.secure && out.port == INTERNET_DEFAULT_HTTPS_PORT) || (!out.secure && out.port == INTERNET_DEFAULT_HTTP_PORT);
     if (!default_port)
     {
@@ -550,8 +704,14 @@ inline bool parse_url(const std::wstring& input, ParsedUrl& out, std::string& er
 inline std::wstring origin_of(const ParsedUrl& u)
 {
     std::wstring result = u.scheme_text + L"://";
-    if (u.host.find(L':') != std::wstring::npos) result += L"[" + u.host + L"]";
-    else result += u.host;
+    if (u.host.find(L':') != std::wstring::npos)
+    {
+        result += L"[" + u.host + L"]";
+    }
+    else
+    {
+        result += u.host;
+    }
     bool default_port = (u.secure && u.port == INTERNET_DEFAULT_HTTPS_PORT) || (!u.secure && u.port == INTERNET_DEFAULT_HTTP_PORT);
     if (!default_port)
     {
@@ -574,23 +734,38 @@ inline std::wstring remove_dot_segments(const std::wstring& path)
         std::wstring part = path.substr(start, slash == std::wstring::npos ? std::wstring::npos : slash - start);
         if (part == L"..")
         {
-            if (!parts.empty()) parts.pop_back();
+            if (!parts.empty())
+            {
+                parts.pop_back();
+            }
         }
         else if (!part.empty() && part != L".")
         {
             parts.push_back(part);
         }
-        if (slash == std::wstring::npos) break;
+        if (slash == std::wstring::npos)
+        {
+            break;
+        }
         start = slash + 1;
     }
     std::wstring result = leading ? L"/" : L"";
     for (size_t i = 0; i < parts.size(); ++i)
     {
-        if (i > 0) result += L"/";
+        if (i > 0)
+        {
+            result += L"/";
+        }
         result += parts[i];
     }
-    if (trailing && !result.empty() && result[result.size() - 1] != L'/') result += L"/";
-    if (result.empty()) result = leading ? L"/" : L".";
+    if (trailing && !result.empty() && result[result.size() - 1] != L'/')
+    {
+        result += L"/";
+    }
+    if (result.empty())
+    {
+        result = leading ? L"/" : L".";
+    }
     return result;
 }
 
@@ -608,7 +783,10 @@ inline bool resolve_redirect(const ParsedUrl& base, const std::string& location_
         return false;
     }
     size_t fragment = location.find(L'#');
-    if (fragment != std::wstring::npos) location.erase(fragment);
+    if (fragment != std::wstring::npos)
+    {
+        location.erase(fragment);
+    }
     if (location.find(L"://") != std::wstring::npos)
     {
         result = location;
@@ -635,8 +813,14 @@ inline bool resolve_redirect(const ParsedUrl& base, const std::string& location_
     }
     std::wstring base_dir = base.path_only;
     size_t slash = base_dir.find_last_of(L'/');
-    if (slash == std::wstring::npos) base_dir = L"/";
-    else base_dir.erase(slash + 1);
+    if (slash == std::wstring::npos)
+    {
+        base_dir = L"/";
+    }
+    else
+    {
+        base_dir.erase(slash + 1);
+    }
     size_t q = location.find(L'?');
     std::wstring rel_path = q == std::wstring::npos ? location : location.substr(0, q);
     std::wstring query = q == std::wstring::npos ? L"" : location.substr(q);
@@ -657,11 +841,20 @@ inline uint64_t now_filetime()
 inline bool parse_http_time(const std::string& value, uint64_t& out)
 {
     std::wstring wide;
-    if (!utf8_to_wide(value, wide)) return false;
+    if (!utf8_to_wide(value, wide))
+    {
+        return false;
+    }
     SYSTEMTIME st = {};
-    if (!WinHttpTimeToSystemTime(wide.c_str(), &st)) return false;
+    if (!WinHttpTimeToSystemTime(wide.c_str(), &st))
+    {
+        return false;
+    }
     FILETIME ft;
-    if (!SystemTimeToFileTime(&st, &ft)) return false;
+    if (!SystemTimeToFileTime(&st, &ft))
+    {
+        return false;
+    }
     ULARGE_INTEGER u;
     u.LowPart = ft.dwLowDateTime;
     u.HighPart = ft.dwHighDateTime;
@@ -672,13 +865,22 @@ inline bool parse_http_time(const std::string& value, uint64_t& out)
 inline bool parse_uint64(const std::string& value, uint64_t& out)
 {
     std::string s = trim_ascii(value);
-    if (s.empty()) return false;
+    if (s.empty())
+    {
+        return false;
+    }
     uint64_t n = 0;
     for (size_t i = 0; i < s.size(); ++i)
     {
-        if (s[i] < '0' || s[i] > '9') return false;
+        if (s[i] < '0' || s[i] > '9')
+        {
+            return false;
+        }
         uint64_t digit = static_cast<uint64_t>(s[i] - '0');
-        if (n > ((std::numeric_limits<uint64_t>::max)() - digit) / 10ULL) return false;
+        if (n > ((std::numeric_limits<uint64_t>::max)() - digit) / 10ULL)
+        {
+            return false;
+        }
         n = n * 10ULL + digit;
     }
     out = n;
@@ -688,32 +890,50 @@ inline bool parse_uint64(const std::string& value, uint64_t& out)
 inline bool parse_int64(const std::string& value, int64_t& out)
 {
     std::string s = trim_ascii(value);
-    if (s.empty()) return false;
+    if (s.empty())
+    {
+        return false;
+    }
     bool neg = false;
     size_t i = 0;
     if (s[0] == '+' || s[0] == '-')
     {
         neg = s[0] == '-';
         i = 1;
-        if (i == s.size()) return false;
+        if (i == s.size())
+        {
+            return false;
+        }
     }
     uint64_t n = 0;
     for (; i < s.size(); ++i)
     {
-        if (s[i] < '0' || s[i] > '9') return false;
+        if (s[i] < '0' || s[i] > '9')
+        {
+            return false;
+        }
         uint64_t digit = static_cast<uint64_t>(s[i] - '0');
-        if (n > ((std::numeric_limits<uint64_t>::max)() - digit) / 10ULL) return false;
+        if (n > ((std::numeric_limits<uint64_t>::max)() - digit) / 10ULL)
+        {
+            return false;
+        }
         n = n * 10ULL + digit;
     }
     if (neg)
     {
         uint64_t limit = static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) + 1ULL;
-        if (n > limit) return false;
+        if (n > limit)
+        {
+            return false;
+        }
         out = n == limit ? (std::numeric_limits<int64_t>::min)() : -static_cast<int64_t>(n);
     }
     else
     {
-        if (n > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) return false;
+        if (n > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()))
+        {
+            return false;
+        }
         out = static_cast<int64_t>(n);
     }
     return true;
@@ -742,8 +962,14 @@ inline std::string winhttp_error_message(const wchar_t* operation, DWORD code)
     oss << operation << L"\u5931\u8d25\uff1a";
     std::wstring desc;
     std::string d = winhttp_error_description(code);
-    if (utf8_to_wide(d, desc)) oss << desc;
-    else oss << L"WinHTTP \u8bf7\u6c42\u6267\u884c\u5931\u8d25";
+    if (utf8_to_wide(d, desc))
+    {
+        oss << desc;
+    }
+    else
+    {
+        oss << L"WinHTTP \u8bf7\u6c42\u6267\u884c\u5931\u8d25";
+    }
     oss << L"\uff08WinHTTP \u9519\u8bef\u7801 " << code << L"\uff09";
     return wide_to_utf8(oss.str());
 }
@@ -771,10 +997,19 @@ inline bool is_retryable_winhttp_error(DWORD code)
 
 inline DWORD capped_sleep_ms(double value, int max_ms)
 {
-    if (value < 0.0) value = 0.0;
+    if (value < 0.0)
+    {
+        value = 0.0;
+    }
     double cap = max_ms < 0 ? 0.0 : static_cast<double>(max_ms);
-    if (value > cap) value = cap;
-    if (value > static_cast<double>((std::numeric_limits<DWORD>::max)())) value = static_cast<double>((std::numeric_limits<DWORD>::max)());
+    if (value > cap)
+    {
+        value = cap;
+    }
+    if (value > static_cast<double>((std::numeric_limits<DWORD>::max)()))
+    {
+        value = static_cast<double>((std::numeric_limits<DWORD>::max)());
+    }
     return static_cast<DWORD>(value);
 }
 
@@ -813,8 +1048,14 @@ struct Headers
 {
     std::unordered_map<std::string, std::string> fields;
 
-    Headers() {}
-    Headers(const Headers& other) : fields(other.fields) {}
+    Headers()
+    {
+
+        }
+    Headers(const Headers& other) : fields(other.fields)
+    {
+
+        }
     Headers& operator=(const Headers& other)
     {
         if (this != &other)
@@ -824,7 +1065,10 @@ struct Headers
         }
         return *this;
     }
-    Headers(Headers&& other) noexcept : fields(std::move(other.fields)) { other.fields.clear(); }
+    Headers(Headers&& other) noexcept : fields(std::move(other.fields))
+    {
+         other.fields.clear();
+    }
     Headers& operator=(Headers&& other) noexcept
     {
         if (this != &other)
@@ -858,7 +1102,10 @@ struct Headers
     {
         for (std::unordered_map<std::string, std::string>::const_iterator it = fields.begin(); it != fields.end(); ++it)
         {
-            if (detail::ascii_iequals(it->first, key)) return it->second;
+            if (detail::ascii_iequals(it->first, key))
+            {
+                return it->second;
+            }
         }
         return "";
     }
@@ -867,7 +1114,10 @@ struct Headers
     {
         for (std::unordered_map<std::string, std::string>::const_iterator it = fields.begin(); it != fields.end(); ++it)
         {
-            if (detail::ascii_iequals(it->first, key)) return true;
+            if (detail::ascii_iequals(it->first, key))
+            {
+                return true;
+            }
         }
         return false;
     }
@@ -881,13 +1131,19 @@ struct Headers
                 detail::secure_clear(it->second);
                 it = fields.erase(it);
             }
-            else ++it;
+            else
+            {
+                ++it;
+            }
         }
     }
 
     void clear()
     {
-        for (std::unordered_map<std::string, std::string>::iterator it = fields.begin(); it != fields.end(); ++it) detail::secure_clear(it->second);
+        for (std::unordered_map<std::string, std::string>::iterator it = fields.begin(); it != fields.end(); ++it)
+        {
+            detail::secure_clear(it->second);
+        }
         fields.clear();
     }
 
@@ -906,8 +1162,14 @@ struct ResponseHeaders
 {
     std::unordered_map<std::string, std::vector<std::string> > fields;
 
-    ResponseHeaders() {}
-    ResponseHeaders(const ResponseHeaders& other) : fields(other.fields) {}
+    ResponseHeaders()
+    {
+
+        }
+    ResponseHeaders(const ResponseHeaders& other) : fields(other.fields)
+    {
+
+        }
     ResponseHeaders& operator=(const ResponseHeaders& other)
     {
         if (this != &other)
@@ -917,7 +1179,10 @@ struct ResponseHeaders
         }
         return *this;
     }
-    ResponseHeaders(ResponseHeaders&& other) noexcept : fields(std::move(other.fields)) { other.fields.clear(); }
+    ResponseHeaders(ResponseHeaders&& other) noexcept : fields(std::move(other.fields))
+    {
+         other.fields.clear();
+    }
     ResponseHeaders& operator=(ResponseHeaders&& other) noexcept
     {
         if (this != &other)
@@ -941,7 +1206,10 @@ struct ResponseHeaders
     std::string get(const std::string& key) const
     {
         std::unordered_map<std::string, std::vector<std::string> >::const_iterator it = fields.find(detail::ascii_lower_copy(key));
-        if (it == fields.end() || it->second.empty()) return "";
+        if (it == fields.end() || it->second.empty())
+        {
+            return "";
+        }
         return it->second.front();
     }
 
@@ -960,7 +1228,10 @@ struct ResponseHeaders
     {
         for (std::unordered_map<std::string, std::vector<std::string> >::iterator it = fields.begin(); it != fields.end(); ++it)
         {
-            for (size_t i = 0; i < it->second.size(); ++i) detail::secure_clear(it->second[i]);
+            for (size_t i = 0; i < it->second.size(); ++i)
+            {
+                detail::secure_clear(it->second[i]);
+            }
         }
         fields.clear();
     }
@@ -1045,15 +1316,42 @@ class WinHttpHandle
 {
     HINTERNET handle_;
 public:
-    explicit WinHttpHandle(HINTERNET handle = NULL) : handle_(handle) {}
-    ~WinHttpHandle() { if (handle_) WinHttpCloseHandle(handle_); }
+    explicit WinHttpHandle(HINTERNET handle = NULL) : handle_(handle)
+    {
+
+        }
+    ~WinHttpHandle()
+    {
+         if (handle_)
+    {
+        WinHttpCloseHandle(handle_);
+    }
+
+    }
     HINTERNET get() const { return handle_; }
-    HINTERNET release() { HINTERNET h = handle_; handle_ = NULL; return h; }
-    void reset(HINTERNET h = NULL) { if (handle_) WinHttpCloseHandle(handle_); handle_ = h; }
+    HINTERNET release()
+    {
+         HINTERNET h = handle_; handle_ = NULL; return h;
+    }
+    void reset(HINTERNET h = NULL)
+    {
+         if (handle_)
+    {
+        WinHttpCloseHandle(handle_);
+    }
+     handle_ = h;
+    }
     WinHttpHandle(const WinHttpHandle&) = delete;
     WinHttpHandle& operator=(const WinHttpHandle&) = delete;
-    WinHttpHandle(WinHttpHandle&& other) noexcept : handle_(other.handle_) { other.handle_ = NULL; }
-    WinHttpHandle& operator=(WinHttpHandle&& other) noexcept { if (this != &other) { reset(other.handle_); other.handle_ = NULL; } return *this; }
+    WinHttpHandle(WinHttpHandle&& other) noexcept : handle_(other.handle_)
+    {
+         other.handle_ = NULL;
+    }
+    WinHttpHandle& operator=(WinHttpHandle&& other) noexcept { if (this != &other)
+    {
+         reset(other.handle_); other.handle_ = NULL;
+    }
+     return *this; }
     explicit operator bool() const { return handle_ != NULL; }
 };
 
@@ -1061,10 +1359,27 @@ class FileHandle
 {
     HANDLE handle_;
 public:
-    explicit FileHandle(HANDLE handle = INVALID_HANDLE_VALUE) : handle_(handle) {}
-    ~FileHandle() { if (handle_ != INVALID_HANDLE_VALUE && handle_ != NULL) CloseHandle(handle_); }
+    explicit FileHandle(HANDLE handle = INVALID_HANDLE_VALUE) : handle_(handle)
+    {
+
+        }
+    ~FileHandle()
+    {
+         if (handle_ != INVALID_HANDLE_VALUE && handle_ != NULL)
+    {
+        CloseHandle(handle_);
+    }
+
+    }
     HANDLE get() const { return handle_; }
-    void reset(HANDLE handle = INVALID_HANDLE_VALUE) { if (handle_ != INVALID_HANDLE_VALUE && handle_ != NULL) CloseHandle(handle_); handle_ = handle; }
+    void reset(HANDLE handle = INVALID_HANDLE_VALUE)
+    {
+         if (handle_ != INVALID_HANDLE_VALUE && handle_ != NULL)
+    {
+        CloseHandle(handle_);
+    }
+     handle_ = handle;
+    }
     FileHandle(const FileHandle&) = delete;
     FileHandle& operator=(const FileHandle&) = delete;
     explicit operator bool() const { return handle_ != INVALID_HANDLE_VALUE && handle_ != NULL; }
@@ -1092,37 +1407,70 @@ class CookieJar
 
     static bool is_ip_host(const std::wstring& host)
     {
-        if (host.find(L':') != std::wstring::npos) return true;
-        if (host.empty()) return false;
+        if (host.find(L':') != std::wstring::npos)
+        {
+            return true;
+        }
+        if (host.empty())
+        {
+            return false;
+        }
         for (size_t i = 0; i < host.size(); ++i)
         {
-            if ((host[i] < L'0' || host[i] > L'9') && host[i] != L'.') return false;
+            if ((host[i] < L'0' || host[i] > L'9') && host[i] != L'.')
+            {
+                return false;
+            }
         }
         return true;
     }
 
     static bool domain_matches(const std::wstring& host, const std::wstring& domain)
     {
-        if (detail::ascii_iequals(host, domain)) return true;
-        if (is_ip_host(host) || host.size() <= domain.size()) return false;
+        if (detail::ascii_iequals(host, domain))
+        {
+            return true;
+        }
+        if (is_ip_host(host) || host.size() <= domain.size())
+        {
+            return false;
+        }
         size_t start = host.size() - domain.size();
         return start > 0 && host[start - 1] == L'.' && detail::ascii_iequals(host.substr(start), domain);
     }
 
     static std::wstring default_path(const std::wstring& request_path)
     {
-        if (request_path.empty() || request_path[0] != L'/') return L"/";
+        if (request_path.empty() || request_path[0] != L'/')
+        {
+            return L"/";
+        }
         size_t slash = request_path.find_last_of(L'/');
-        if (slash == 0 || slash == std::wstring::npos) return L"/";
+        if (slash == 0 || slash == std::wstring::npos)
+        {
+            return L"/";
+        }
         return request_path.substr(0, slash);
     }
 
     static bool path_matches(const std::wstring& request_path, const std::wstring& cookie_path)
     {
-        if (request_path == cookie_path) return true;
-        if (request_path.size() < cookie_path.size()) return false;
-        if (request_path.compare(0, cookie_path.size(), cookie_path) != 0) return false;
-        if (!cookie_path.empty() && cookie_path[cookie_path.size() - 1] == L'/') return true;
+        if (request_path == cookie_path)
+        {
+            return true;
+        }
+        if (request_path.size() < cookie_path.size())
+        {
+            return false;
+        }
+        if (request_path.compare(0, cookie_path.size(), cookie_path) != 0)
+        {
+            return false;
+        }
+        if (!cookie_path.empty() && cookie_path[cookie_path.size() - 1] == L'/')
+        {
+            return true;
+        }
         return request_path.size() > cookie_path.size() && request_path[cookie_path.size()] == L'/';
     }
 
@@ -1136,7 +1484,10 @@ class CookieJar
         for (size_t i = 0; i < value.size(); ++i)
         {
             unsigned char c = static_cast<unsigned char>(value[i]);
-            if (c < 0x20 || c == 0x7F || c == ';' || c == '\r' || c == '\n' || c == '\0') return false;
+            if (c < 0x20 || c == 0x7F || c == ';' || c == '\r' || c == '\n' || c == '\0')
+            {
+                return false;
+            }
         }
         return true;
     }
@@ -1163,7 +1514,10 @@ class CookieJar
     {
         for (size_t i = cookies_.size(); i > 0; --i)
         {
-            if (cookies_[i - 1].persistent && cookies_[i - 1].expires <= now) erase_at_locked(i - 1);
+            if (cookies_[i - 1].persistent && cookies_[i - 1].expires <= now)
+            {
+                erase_at_locked(i - 1);
+            }
         }
     }
 
@@ -1172,20 +1526,32 @@ class CookieJar
         for (size_t i = cookies_.size(); i > 0; --i)
         {
             const Cookie& c = cookies_[i - 1];
-            if (c.name == name && detail::ascii_iequals(c.domain, domain) && c.path == path) erase_at_locked(i - 1);
+            if (c.name == name && detail::ascii_iequals(c.domain, domain) && c.path == path)
+            {
+                erase_at_locked(i - 1);
+            }
         }
     }
 
 public:
-    CookieJar() : sequence_(0) {}
-    ~CookieJar() { clear(); }
+    CookieJar() : sequence_(0)
+    {
+
+        }
+    ~CookieJar()
+    {
+         clear();
+    }
     CookieJar(const CookieJar&) = delete;
     CookieJar& operator=(const CookieJar&) = delete;
 
     void clear()
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        for (size_t i = 0; i < cookies_.size(); ++i) wipe_cookie(cookies_[i]);
+        for (size_t i = 0; i < cookies_.size(); ++i)
+        {
+            wipe_cookie(cookies_[i]);
+        }
         cookies_.clear();
         sequence_ = 0;
     }
@@ -1201,18 +1567,36 @@ public:
     {
         std::wstring domain;
         std::wstring path;
-        if (!domain_utf8.empty() && !detail::utf8_to_wide(domain_utf8, domain)) return false;
-        if (!path_utf8.empty() && !detail::utf8_to_wide(path_utf8, path)) return false;
+        if (!domain_utf8.empty() && !detail::utf8_to_wide(domain_utf8, domain))
+        {
+            return false;
+        }
+        if (!path_utf8.empty() && !detail::utf8_to_wide(path_utf8, path))
+        {
+            return false;
+        }
         domain = detail::ascii_lower_copy(domain);
-        while (!domain.empty() && domain[0] == L'.') domain.erase(domain.begin());
+        while (!domain.empty() && domain[0] == L'.')
+        {
+            domain.erase(domain.begin());
+        }
         std::lock_guard<std::mutex> lock(mutex_);
         bool removed = false;
         for (size_t i = cookies_.size(); i > 0; --i)
         {
             const Cookie& c = cookies_[i - 1];
-            if (c.name != name) continue;
-            if (!domain.empty() && !detail::ascii_iequals(c.domain, domain)) continue;
-            if (!path.empty() && c.path != path) continue;
+            if (c.name != name)
+            {
+                continue;
+            }
+            if (!domain.empty() && !detail::ascii_iequals(c.domain, domain))
+            {
+                continue;
+            }
+            if (!path.empty() && c.path != path)
+            {
+                continue;
+            }
             erase_at_locked(i - 1);
             removed = true;
         }
@@ -1222,9 +1606,15 @@ public:
     size_t clear_domain(const std::string& domain_utf8)
     {
         std::wstring domain;
-        if (!detail::utf8_to_wide(domain_utf8, domain)) return 0;
+        if (!detail::utf8_to_wide(domain_utf8, domain))
+        {
+            return 0;
+        }
         domain = detail::ascii_lower_copy(domain);
-        while (!domain.empty() && domain[0] == L'.') domain.erase(domain.begin());
+        while (!domain.empty() && domain[0] == L'.')
+        {
+            domain.erase(domain.begin());
+        }
         std::lock_guard<std::mutex> lock(mutex_);
         size_t removed = 0;
         for (size_t i = cookies_.size(); i > 0; --i)
@@ -1240,23 +1630,38 @@ public:
 
     void store(const detail::ParsedUrl& origin, const std::string& set_cookie)
     {
-        if (set_cookie.empty() || set_cookie.size() > 4096) return;
+        if (set_cookie.empty() || set_cookie.size() > 4096)
+        {
+            return;
+        }
         std::vector<std::string> parts;
         size_t start = 0;
         while (start <= set_cookie.size())
         {
             size_t semi = set_cookie.find(';', start);
             parts.push_back(detail::trim_ascii(set_cookie.substr(start, semi == std::string::npos ? std::string::npos : semi - start)));
-            if (semi == std::string::npos) break;
+            if (semi == std::string::npos)
+            {
+                break;
+            }
             start = semi + 1;
         }
-        if (parts.empty()) return;
+        if (parts.empty())
+        {
+            return;
+        }
         size_t eq = parts[0].find('=');
-        if (eq == std::string::npos || eq == 0) return;
+        if (eq == std::string::npos || eq == 0)
+        {
+            return;
+        }
         Cookie cookie;
         cookie.name = detail::trim_ascii(parts[0].substr(0, eq));
         cookie.value = detail::trim_ascii(parts[0].substr(eq + 1));
-        if (!valid_cookie_name(cookie.name) || !valid_cookie_value(cookie.value)) return;
+        if (!valid_cookie_name(cookie.name) || !valid_cookie_value(cookie.value))
+        {
+            return;
+        }
         cookie.domain = origin.host;
         cookie.path = default_path(origin.path_only);
         cookie.host_only = true;
@@ -1271,19 +1676,37 @@ public:
         int64_t max_age = 0;
         for (size_t i = 1; i < parts.size(); ++i)
         {
-            if (parts[i].empty()) continue;
+            if (parts[i].empty())
+            {
+                continue;
+            }
             size_t aeq = parts[i].find('=');
             std::string name = detail::ascii_lower_copy(detail::trim_ascii(parts[i].substr(0, aeq)));
             std::string value = aeq == std::string::npos ? "" : detail::trim_ascii(parts[i].substr(aeq + 1));
-            if (name == "secure") cookie.secure = true;
-            else if (name == "httponly") cookie.http_only = true;
+            if (name == "secure")
+            {
+                cookie.secure = true;
+            }
+            else if (name == "httponly")
+            {
+                cookie.http_only = true;
+            }
             else if (name == "domain" && !value.empty())
             {
                 std::wstring d;
-                if (!detail::utf8_to_wide(value, d)) return;
+                if (!detail::utf8_to_wide(value, d))
+                {
+                    return;
+                }
                 d = detail::ascii_lower_copy(detail::trim_ascii(d));
-                while (!d.empty() && d[0] == L'.') d.erase(d.begin());
-                if (d.empty() || !domain_matches(origin.host, d)) return;
+                while (!d.empty() && d[0] == L'.')
+                {
+                    d.erase(d.begin());
+                }
+                if (d.empty() || !domain_matches(origin.host, d))
+                {
+                    return;
+                }
                 cookie.domain = d;
                 cookie.host_only = false;
                 has_domain = true;
@@ -1319,7 +1742,10 @@ public:
         if (has_max_age)
         {
             cookie.persistent = true;
-            if (max_age <= 0) cookie.expires = 0;
+            if (max_age <= 0)
+            {
+                cookie.expires = 0;
+            }
             else
             {
                 uint64_t now = detail::now_filetime();
@@ -1327,13 +1753,25 @@ public:
                 cookie.expires = delta > (std::numeric_limits<uint64_t>::max)() - now ? (std::numeric_limits<uint64_t>::max)() : now + delta;
             }
         }
-        if (cookie.secure && !origin.secure) return;
-        if (cookie.name.find("__Secure-") == 0 && (!cookie.secure || !origin.secure)) return;
-        if (cookie.name.find("__Host-") == 0 && (!cookie.secure || !origin.secure || has_domain || cookie.path != L"/" || !has_path)) return;
+        if (cookie.secure && !origin.secure)
+        {
+            return;
+        }
+        if (cookie.name.find("__Secure-") == 0 && (!cookie.secure || !origin.secure))
+        {
+            return;
+        }
+        if (cookie.name.find("__Host-") == 0 && (!cookie.secure || !origin.secure || has_domain || cookie.path != L"/" || !has_path))
+        {
+            return;
+        }
         std::lock_guard<std::mutex> lock(mutex_);
         remove_expired_locked(detail::now_filetime());
         remove_exact_locked(cookie.name, cookie.domain, cookie.path);
-        if (cookie.persistent && cookie.expires <= detail::now_filetime()) return;
+        if (cookie.persistent && cookie.expires <= detail::now_filetime())
+        {
+            return;
+        }
         size_t same_domain = 0;
         size_t oldest_domain_index = 0;
         uint64_t oldest_domain_sequence = (std::numeric_limits<uint64_t>::max)();
@@ -1349,8 +1787,14 @@ public:
                 }
             }
         }
-        if (same_domain >= 180 && !cookies_.empty()) erase_at_locked(oldest_domain_index);
-        if (cookies_.size() >= 3000) erase_at_locked(0);
+        if (same_domain >= 180 && !cookies_.empty())
+        {
+            erase_at_locked(oldest_domain_index);
+        }
+        if (cookies_.size() >= 3000)
+        {
+            erase_at_locked(0);
+        }
         cookie.sequence = ++sequence_;
         cookies_.push_back(cookie);
         wipe_cookie(cookie);
@@ -1365,12 +1809,18 @@ public:
         {
             const Cookie& c = cookies_[i];
             bool domain_ok = c.host_only ? detail::ascii_iequals(target.host, c.domain) : domain_matches(target.host, c.domain);
-            if (!domain_ok || !path_matches(target.path_only, c.path) || (c.secure && !target.secure)) continue;
+            if (!domain_ok || !path_matches(target.path_only, c.path) || (c.secure && !target.secure))
+            {
+                continue;
+            }
             matches.push_back(&c);
         }
         std::sort(matches.begin(), matches.end(), [](const Cookie* a, const Cookie* b)
         {
-            if (a->path.size() != b->path.size()) return a->path.size() > b->path.size();
+            if (a->path.size() != b->path.size())
+            {
+                return a->path.size() > b->path.size();
+            }
             return a->sequence < b->sequence;
         });
         std::string result;
@@ -1379,8 +1829,14 @@ public:
             std::string pair = matches[i]->name + "=" + matches[i]->value;
             detail::SecureStringGuard pair_guard(pair);
             size_t extra = pair.size() + (result.empty() ? 0 : 2);
-            if (extra > 65536 || result.size() > 65536 - extra) break;
-            if (!result.empty()) result += "; ";
+            if (extra > 65536 || result.size() > 65536 - extra)
+            {
+                break;
+            }
+            if (!result.empty())
+            {
+                result += "; ";
+            }
             result += pair;
         }
         return result;
@@ -1414,10 +1870,16 @@ inline bool query_raw_headers(HINTERNET request, ResponseHeaders& headers)
     DWORD size = 0;
     WinHttpQueryHeaders(request, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, WINHTTP_NO_OUTPUT_BUFFER, &size, WINHTTP_NO_HEADER_INDEX);
     DWORD e = GetLastError();
-    if (e != ERROR_INSUFFICIENT_BUFFER || size == 0) return false;
+    if (e != ERROR_INSUFFICIENT_BUFFER || size == 0)
+    {
+        return false;
+    }
     std::vector<wchar_t> buffer(static_cast<size_t>(size / sizeof(wchar_t)) + 2, L'\0');
     DWORD actual = size;
-    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, buffer.data(), &actual, WINHTTP_NO_HEADER_INDEX)) return false;
+    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, buffer.data(), &actual, WINHTTP_NO_HEADER_INDEX))
+    {
+        return false;
+    }
     std::wstring raw(buffer.data());
     size_t start = 0;
     bool first = true;
@@ -1436,7 +1898,10 @@ inline bool query_raw_headers(HINTERNET request, ResponseHeaders& headers)
             }
         }
         first = false;
-        if (end == std::wstring::npos) break;
+        if (end == std::wstring::npos)
+        {
+            break;
+        }
         start = end + 2;
     }
     return true;
@@ -1444,32 +1909,59 @@ inline bool query_raw_headers(HINTERNET request, ResponseHeaders& headers)
 
 inline ErrorCode map_winhttp_error(DWORD code, ErrorCode fallback)
 {
-    if (code == ERROR_WINHTTP_TIMEOUT) return ErrorCode::Timeout;
-    if (code == ERROR_WINHTTP_NAME_NOT_RESOLVED) return ErrorCode::NameResolutionFailed;
-    if (code == ERROR_WINHTTP_CANNOT_CONNECT || code == ERROR_WINHTTP_CONNECTION_ERROR) return ErrorCode::ConnectionFailed;
-    if (code == ERROR_WINHTTP_SECURE_FAILURE) return ErrorCode::TlsFailure;
-    if (code == ERROR_WINHTTP_OPERATION_CANCELLED) return ErrorCode::Cancelled;
+    if (code == ERROR_WINHTTP_TIMEOUT)
+    {
+        return ErrorCode::Timeout;
+    }
+    if (code == ERROR_WINHTTP_NAME_NOT_RESOLVED)
+    {
+        return ErrorCode::NameResolutionFailed;
+    }
+    if (code == ERROR_WINHTTP_CANNOT_CONNECT || code == ERROR_WINHTTP_CONNECTION_ERROR)
+    {
+        return ErrorCode::ConnectionFailed;
+    }
+    if (code == ERROR_WINHTTP_SECURE_FAILURE)
+    {
+        return ErrorCode::TlsFailure;
+    }
+    if (code == ERROR_WINHTTP_OPERATION_CANCELLED)
+    {
+        return ErrorCode::Cancelled;
+    }
     return fallback;
 }
 
 inline int retry_after_ms(const ResponseHeaders& headers, int max_ms)
 {
     std::string value = trim_ascii(headers.get("Retry-After"));
-    if (value.empty()) return -1;
+    if (value.empty())
+    {
+        return -1;
+    }
     uint64_t seconds = 0;
     if (parse_uint64(value, seconds))
     {
         uint64_t ms = seconds > (std::numeric_limits<uint64_t>::max)() / 1000ULL ? (std::numeric_limits<uint64_t>::max)() : seconds * 1000ULL;
-        if (ms > static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms)) ms = static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms);
+        if (ms > static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms))
+        {
+            ms = static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms);
+        }
         return static_cast<int>(ms);
     }
     uint64_t when = 0;
     if (parse_http_time(value, when))
     {
         uint64_t now = now_filetime();
-        if (when <= now) return 0;
+        if (when <= now)
+        {
+            return 0;
+        }
         uint64_t ms = (when - now) / 10000ULL;
-        if (ms > static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms)) ms = static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms);
+        if (ms > static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms))
+        {
+            ms = static_cast<uint64_t>(max_ms < 0 ? 0 : max_ms);
+        }
         return static_cast<int>(ms);
     }
     return -1;
@@ -1489,7 +1981,10 @@ inline unsigned int retry_jitter_value(int retry_index)
 inline void sleep_retry(const RetryPolicy& policy, int retry_index, const ResponseHeaders* headers)
 {
     int explicit_delay = -1;
-    if (policy.respect_retry_after && headers) explicit_delay = retry_after_ms(*headers, policy.max_delay_ms);
+    if (policy.respect_retry_after && headers)
+    {
+        explicit_delay = retry_after_ms(*headers, policy.max_delay_ms);
+    }
     double delay = explicit_delay >= 0 ? static_cast<double>(explicit_delay) : static_cast<double>(policy.initial_delay_ms) * std::pow(policy.multiplier > 0.0 ? policy.multiplier : 1.0, static_cast<double>(retry_index));
     if (explicit_delay < 0 && policy.jitter && delay > 1.0)
     {
@@ -1508,7 +2003,10 @@ inline std::string http_error_message(int status)
 
 inline std::string attempts_suffix(int attempts)
 {
-    if (attempts <= 1) return "";
+    if (attempts <= 1)
+    {
+        return "";
+    }
     std::ostringstream oss;
     oss << text(L"\uff0c\u5df2\u5c1d\u8bd5 ") << attempts << text(L" \u6b21");
     return oss.str();
@@ -1534,7 +2032,10 @@ class MemorySink
     size_t limit_;
     bool too_large_;
 public:
-    explicit MemorySink(size_t limit) : limit_(limit), too_large_(false) {}
+    explicit MemorySink(size_t limit) : limit_(limit), too_large_(false)
+    {
+
+        }
     bool reset()
     {
         data_.clear();
@@ -1543,13 +2044,22 @@ public:
     }
     bool reserve(uint64_t size)
     {
-        if (limit_ > 0 && size > static_cast<uint64_t>(limit_)) { too_large_ = true; return false; }
-        if (size <= static_cast<uint64_t>((std::numeric_limits<size_t>::max)())) data_.reserve(static_cast<size_t>(size));
+        if (limit_ > 0 && size > static_cast<uint64_t>(limit_))
+        {
+             too_large_ = true; return false;
+        }
+        if (size <= static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+        {
+            data_.reserve(static_cast<size_t>(size));
+        }
         return true;
     }
     bool write(const char* data, size_t size)
     {
-        if (limit_ > 0 && (data_.size() > limit_ || size > limit_ - data_.size())) { too_large_ = true; return false; }
+        if (limit_ > 0 && (data_.size() > limit_ || size > limit_ - data_.size()))
+        {
+             too_large_ = true; return false;
+        }
         data_.append(data, size);
         return true;
     }
@@ -1583,7 +2093,10 @@ public:
     ~FileSink()
     {
         file_.reset();
-        if (!committed_ && !temp_.empty()) DeleteFileW(temp_.c_str());
+        if (!committed_ && !temp_.empty())
+        {
+            DeleteFileW(temp_.c_str());
+        }
     }
 
     bool destination_exists() const { return exists(destination_); }
@@ -1592,7 +2105,10 @@ public:
     {
         static volatile LONG sequence = 0;
         file_.reset();
-        if (!temp_.empty()) DeleteFileW(temp_.c_str());
+        if (!temp_.empty())
+        {
+            DeleteFileW(temp_.c_str());
+        }
         temp_.clear();
         written_ = 0;
         too_large_ = false;
@@ -1610,27 +2126,42 @@ public:
                 return true;
             }
             DWORD error = GetLastError();
-            if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS) return false;
+            if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS)
+            {
+                return false;
+            }
         }
         return false;
     }
 
     bool reserve(uint64_t size)
     {
-        if (limit_ > 0 && size > limit_) { too_large_ = true; return false; }
+        if (limit_ > 0 && size > limit_)
+        {
+             too_large_ = true; return false;
+        }
         return true;
     }
 
     bool write(const char* data, size_t size)
     {
-        if (!file_) return false;
-        if (limit_ > 0 && (written_ > limit_ || static_cast<uint64_t>(size) > limit_ - written_)) { too_large_ = true; return false; }
+        if (!file_)
+        {
+            return false;
+        }
+        if (limit_ > 0 && (written_ > limit_ || static_cast<uint64_t>(size) > limit_ - written_))
+        {
+             too_large_ = true; return false;
+        }
         size_t offset = 0;
         while (offset < size)
         {
             DWORD chunk = static_cast<DWORD>((std::min)(size - offset, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
             DWORD done = 0;
-            if (!WriteFile(file_.get(), data + offset, chunk, &done, NULL) || done != chunk) return false;
+            if (!WriteFile(file_.get(), data + offset, chunk, &done, NULL) || done != chunk)
+            {
+                return false;
+            }
             offset += done;
             written_ += done;
         }
@@ -1642,13 +2173,28 @@ public:
 
     bool commit()
     {
-        if (!file_) return false;
-        if (!FlushFileBuffers(file_.get())) return false;
+        if (!file_)
+        {
+            return false;
+        }
+        if (!FlushFileBuffers(file_.get()))
+        {
+            return false;
+        }
         file_.reset();
-        if (!overwrite_ && exists(destination_)) return false;
+        if (!overwrite_ && exists(destination_))
+        {
+            return false;
+        }
         DWORD flags = MOVEFILE_WRITE_THROUGH;
-        if (overwrite_) flags |= MOVEFILE_REPLACE_EXISTING;
-        if (!MoveFileExW(temp_.c_str(), destination_.c_str(), flags)) return false;
+        if (overwrite_)
+        {
+            flags |= MOVEFILE_REPLACE_EXISTING;
+        }
+        if (!MoveFileExW(temp_.c_str(), destination_.c_str(), flags))
+        {
+            return false;
+        }
         committed_ = true;
         return true;
     }
@@ -1669,7 +2215,10 @@ class Session
     bool ensure_session()
     {
         std::lock_guard<std::mutex> lock(connection_mutex_);
-        if (session_) return true;
+        if (session_)
+        {
+            return true;
+        }
         HINTERNET h = WinHttpOpen(options_.user_agent.c_str(), options_.access_type, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         if (!h)
         {
@@ -1698,7 +2247,10 @@ class Session
         std::wstring key = detail::connection_key(url);
         std::lock_guard<std::mutex> lock(connection_mutex_);
         std::unordered_map<std::wstring, std::shared_ptr<WinHttpHandle> >::iterator it = connections_.find(key);
-        if (it != connections_.end()) return it->second;
+        if (it != connections_.end())
+        {
+            return it->second;
+        }
         HINTERNET h = WinHttpConnect(session_.get(), url.host.c_str(), url.port, 0);
         if (!h)
         {
@@ -1709,7 +2261,10 @@ class Session
         std::shared_ptr<WinHttpHandle> handle(new WinHttpHandle(h));
         if (options_.max_connections > 0)
         {
-            if (connections_.size() >= options_.max_connections && !connections_.empty()) connections_.erase(connections_.begin());
+            if (connections_.size() >= options_.max_connections && !connections_.empty())
+            {
+                connections_.erase(connections_.begin());
+            }
             connections_[key] = handle;
         }
         return handle;
@@ -1717,13 +2272,34 @@ class Session
 
     static bool validate_options(const RequestOptions& o, std::string& error)
     {
-        if (o.timeout_ms < 0) { error = detail::text(L"\u8d85\u65f6\u65f6\u95f4\u4e0d\u80fd\u5c0f\u4e8e 0"); return false; }
-        if (o.max_redirects < 0) { error = detail::text(L"\u6700\u5927\u91cd\u5b9a\u5411\u6b21\u6570\u4e0d\u80fd\u5c0f\u4e8e 0"); return false; }
-        if (o.retry.retries < 0) { error = detail::text(L"\u91cd\u8bd5\u6b21\u6570\u4e0d\u80fd\u5c0f\u4e8e 0"); return false; }
-        if (o.retry.retries > 100) { error = detail::text(L"\u91cd\u8bd5\u6b21\u6570\u4e0d\u80fd\u5927\u4e8e 100"); return false; }
-        if (o.max_redirects > 100) { error = detail::text(L"\u6700\u5927\u91cd\u5b9a\u5411\u6b21\u6570\u4e0d\u80fd\u5927\u4e8e 100"); return false; }
-        if (o.retry.initial_delay_ms < 0 || o.retry.max_delay_ms < 0) { error = detail::text(L"\u91cd\u8bd5\u5ef6\u8fdf\u65f6\u95f4\u4e0d\u80fd\u5c0f\u4e8e 0"); return false; }
-        if (o.retry.multiplier <= 0.0) { error = detail::text(L"\u91cd\u8bd5\u500d\u7387\u5fc5\u987b\u5927\u4e8e 0"); return false; }
+        if (o.timeout_ms < 0)
+        {
+             error = detail::text(L"\u8d85\u65f6\u65f6\u95f4\u4e0d\u80fd\u5c0f\u4e8e 0"); return false;
+        }
+        if (o.max_redirects < 0)
+        {
+             error = detail::text(L"\u6700\u5927\u91cd\u5b9a\u5411\u6b21\u6570\u4e0d\u80fd\u5c0f\u4e8e 0"); return false;
+        }
+        if (o.retry.retries < 0)
+        {
+             error = detail::text(L"\u91cd\u8bd5\u6b21\u6570\u4e0d\u80fd\u5c0f\u4e8e 0"); return false;
+        }
+        if (o.retry.retries > 100)
+        {
+             error = detail::text(L"\u91cd\u8bd5\u6b21\u6570\u4e0d\u80fd\u5927\u4e8e 100"); return false;
+        }
+        if (o.max_redirects > 100)
+        {
+             error = detail::text(L"\u6700\u5927\u91cd\u5b9a\u5411\u6b21\u6570\u4e0d\u80fd\u5927\u4e8e 100"); return false;
+        }
+        if (o.retry.initial_delay_ms < 0 || o.retry.max_delay_ms < 0)
+        {
+             error = detail::text(L"\u91cd\u8bd5\u5ef6\u8fdf\u65f6\u95f4\u4e0d\u80fd\u5c0f\u4e8e 0"); return false;
+        }
+        if (o.retry.multiplier <= 0.0)
+        {
+             error = detail::text(L"\u91cd\u8bd5\u500d\u7387\u5fc5\u987b\u5927\u4e8e 0"); return false;
+        }
         return true;
     }
 
@@ -1771,7 +2347,10 @@ class Session
         }
         DWORD disable = WINHTTP_DISABLE_COOKIES;
 #ifdef WINHTTP_DISABLE_AUTHENTICATION
-        if (!options.retry.allow_automatic_authentication) disable |= WINHTTP_DISABLE_AUTHENTICATION;
+        if (!options.retry.allow_automatic_authentication)
+        {
+            disable |= WINHTTP_DISABLE_AUTHENTICATION;
+        }
 #endif
         if (!WinHttpSetOption(request.get(), WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable)))
         {
@@ -1791,7 +2370,10 @@ class Session
         {
             std::string cookie = cookies_.header_for(url);
             detail::SecureStringGuard cookie_guard(cookie);
-            if (!cookie.empty()) actual.set("Cookie", cookie);
+            if (!cookie.empty())
+            {
+                actual.set("Cookie", cookie);
+            }
         }
         std::string header_error;
         if (!detail::validate_headers(actual, header_error))
@@ -1865,7 +2447,10 @@ class Session
         if (cookies_enabled)
         {
             std::vector<std::string> set_cookies = r.headers.get_all("Set-Cookie");
-            for (size_t i = 0; i < set_cookies.size(); ++i) cookies_.store(url, set_cookies[i]);
+            for (size_t i = 0; i < set_cookies.size(); ++i)
+            {
+                cookies_.store(url, set_cookies[i]);
+            }
         }
         uint64_t content_length = 0;
         std::string cl = r.headers.get("Content-Length");
@@ -1891,7 +2476,10 @@ class Session
                 r.error_message = detail::winhttp_error_message(L"\u8bfb\u53d6\u54cd\u5e94\u6570\u636e", native);
                 return r;
             }
-            if (got == 0) break;
+            if (got == 0)
+            {
+                break;
+            }
             if (!sink.write(buffer, static_cast<size_t>(got)))
             {
                 r.received_bytes = static_cast<size_t>((std::min)(sink.size(), static_cast<uint64_t>((std::numeric_limits<size_t>::max)())));
@@ -1944,7 +2532,10 @@ class Session
             bool can_retry = method_retryable && attempt + 1 < max_attempts && (network_retry || http_retry);
             if (!can_retry)
             {
-                if (current.attempts > 1 && (current.error_code != ErrorCode::None || detail::is_retryable_http_status(current.status_code))) current.error_message += detail::attempts_suffix(current.attempts);
+                if (current.attempts > 1 && (current.error_code != ErrorCode::None || detail::is_retryable_http_status(current.status_code)))
+                {
+                    current.error_message += detail::attempts_suffix(current.attempts);
+                }
                 return current;
             }
             detail::sleep_retry(options.retry, attempt, http_retry ? &current.headers : NULL);
@@ -1989,9 +2580,10 @@ class Session
         {
             detail::ParsedUrl parsed;
             std::string parse_error;
-            if (!detail::parse_url(current_url, parsed, parse_error))
+            bool unsupported_scheme = false;
+            if (!detail::parse_url(current_url, parsed, parse_error, &unsupported_scheme))
             {
-                failure.error_code = ErrorCode::InvalidUrl;
+                failure.error_code = unsupported_scheme ? ErrorCode::UnsupportedScheme : ErrorCode::InvalidUrl;
                 failure.error_message = parse_error;
                 failure.redirect_count = redirects;
                 return failure;
@@ -2014,7 +2606,10 @@ class Session
                 return r;
             }
             std::string location = r.headers.get("Location");
-            if (location.empty()) return r;
+            if (location.empty())
+            {
+                return r;
+            }
             if (redirects >= options.max_redirects)
             {
                 r.error_code = ErrorCode::RedirectLimitExceeded;
@@ -2062,7 +2657,10 @@ class Session
     }
 
 public:
-    explicit Session(const SessionOptions& options = SessionOptions()) : options_(options), cookies_enabled_(options.enable_cookies), init_native_error_(0) {}
+    explicit Session(const SessionOptions& options = SessionOptions()) : options_(options), cookies_enabled_(options.enable_cookies), init_native_error_(0)
+    {
+
+        }
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
 
@@ -2073,14 +2671,23 @@ public:
 
     std::string error_message()
     {
-        if (ensure_session()) return detail::text(L"\u65e0");
+        if (ensure_session())
+        {
+            return detail::text(L"\u65e0");
+        }
         std::lock_guard<std::mutex> lock(connection_mutex_);
         return init_error_;
     }
 
-    CookieJar& cookie_jar() { return cookies_; }
+    CookieJar& cookie_jar()
+    {
+         return cookies_;
+    }
 
-    void clear_cookies() { cookies_.clear(); }
+    void clear_cookies()
+    {
+         cookies_.clear();
+    }
 
     bool delete_cookie(const std::string& name, const std::string& domain = "", const std::string& path = "")
     {
@@ -2092,7 +2699,10 @@ public:
         return cookies_.clear_domain(domain);
     }
 
-    size_t cookie_count() { return cookies_.size(); }
+    size_t cookie_count()
+    {
+         return cookies_.size();
+    }
 
     void set_cookies_enabled(bool enabled, bool clear_when_disabled = true)
     {
@@ -2100,7 +2710,10 @@ public:
             std::lock_guard<std::mutex> lock(option_mutex_);
             cookies_enabled_ = enabled;
         }
-        if (!enabled && clear_when_disabled) cookies_.clear();
+        if (!enabled && clear_when_disabled)
+        {
+            cookies_.clear();
+        }
     }
 
     bool cookies_enabled() const
@@ -2119,8 +2732,14 @@ public:
     {
         {
             std::lock_guard<std::mutex> lock(option_mutex_);
-            if (options.max_response_size == 0) options.max_response_size = options_.max_response_size;
-            if (options.max_redirects < 0) options.max_redirects = options_.max_redirects;
+            if (options.max_response_size == 0)
+            {
+                options.max_response_size = options_.max_response_size;
+            }
+            if (options.max_redirects < 0)
+            {
+                options.max_redirects = options_.max_redirects;
+            }
         }
         MemorySink sink(options.max_response_size);
         Response r = request_impl(method, url, body, headers, options, sink);
@@ -2159,14 +2778,20 @@ public:
     Response post(const std::wstring& url, const std::string& body, const std::string& content_type = "application/x-www-form-urlencoded", const Headers& headers = Headers(), RequestOptions options = RequestOptions())
     {
         Headers h = headers;
-        if (!h.contains("Content-Type")) h.set("Content-Type", content_type);
+        if (!h.contains("Content-Type"))
+        {
+            h.set("Content-Type", content_type);
+        }
         return request(L"POST", url, body, h, options);
     }
 
     Response post(const std::string& url, const std::string& body, const std::string& content_type = "application/x-www-form-urlencoded", const Headers& headers = Headers(), RequestOptions options = RequestOptions())
     {
         Headers h = headers;
-        if (!h.contains("Content-Type")) h.set("Content-Type", content_type);
+        if (!h.contains("Content-Type"))
+        {
+            h.set("Content-Type", content_type);
+        }
         return request(L"POST", url, body, h, options);
     }
 
@@ -2188,8 +2813,14 @@ public:
         }
         {
             std::lock_guard<std::mutex> lock(option_mutex_);
-            if (options.request.max_redirects < 0) options.request.max_redirects = options_.max_redirects;
-            if (options.request.max_response_size == 0) options.request.max_response_size = options_.max_response_size;
+            if (options.request.max_redirects < 0)
+            {
+                options.request.max_redirects = options_.max_redirects;
+            }
+            if (options.request.max_response_size == 0)
+            {
+                options.request.max_response_size = options_.max_response_size;
+            }
         }
         Response r = request_impl(L"GET", url, "", headers, options.request, sink);
         d.status_code = r.status_code;
@@ -2266,7 +2897,10 @@ inline Response get(const std::string& url_utf8, const Headers& headers = Header
 inline Response post(const std::wstring& url, const std::string& body, const std::string& content_type = "application/x-www-form-urlencoded", const Headers& headers = Headers(), int timeout_ms = 0, bool follow_redirect = true, int retries = 0)
 {
     Headers h = headers;
-    if (!h.contains("Content-Type")) h.set("Content-Type", content_type);
+    if (!h.contains("Content-Type"))
+    {
+        h.set("Content-Type", content_type);
+    }
     return send_request(L"POST", url, body, h, timeout_ms, follow_redirect, retries);
 }
 
@@ -2301,16 +2935,25 @@ inline DownloadResult download(const std::string& url_utf8, const std::string& d
 
 inline std::string to_utf8(const std::string& src, int codepage)
 {
-    if (src.empty()) return std::string();
+    if (src.empty())
+    {
+        return std::string();
+    }
     std::string out;
-    if (!detail::convert_codepage(src, static_cast<UINT>(codepage), CP_UTF8, out)) return src;
+    if (!detail::convert_codepage(src, static_cast<UINT>(codepage), CP_UTF8, out))
+    {
+        return src;
+    }
     return out;
 }
 
 inline std::string to_utf8(const std::string& src, const std::string& encoding)
 {
     UINT cp = 0;
-    if (detail::encoding_to_codepage(encoding, cp)) return to_utf8(src, static_cast<int>(cp));
+    if (detail::encoding_to_codepage(encoding, cp))
+    {
+        return to_utf8(src, static_cast<int>(cp));
+    }
     return src;
 }
 
@@ -2321,24 +2964,51 @@ inline std::string text_size(size_t bytes, const std::string& unit = "")
     if (!unit.empty())
     {
         std::string u = unit;
-        std::transform(u.begin(), u.end(), u.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-        if (u == "B") index = 0;
-        else if (u == "KB") index = 1;
-        else if (u == "MB") index = 2;
-        else if (u == "GB") index = 3;
-        else if (u == "TB") index = 4;
-        else if (u == "AUTO") index = -1;
+        std::transform(u.begin(), u.end(), u.begin(), [](unsigned char c)
+        {
+             return static_cast<char>(std::toupper(c));
+        });
+        if (u == "B")
+        {
+            index = 0;
+        }
+        else if (u == "KB")
+        {
+            index = 1;
+        }
+        else if (u == "MB")
+        {
+            index = 2;
+        }
+        else if (u == "GB")
+        {
+            index = 3;
+        }
+        else if (u == "TB")
+        {
+            index = 4;
+        }
+        else if (u == "AUTO")
+        {
+            index = -1;
+        }
     }
     double size = static_cast<double>(bytes);
     int chosen = 0;
     if (index >= 0 && index <= 4)
     {
-        for (int i = 0; i < index; ++i) size /= 1024.0;
+        for (int i = 0; i < index; ++i)
+        {
+            size /= 1024.0;
+        }
         chosen = index;
     }
     else
     {
-        while (size >= 1024.0 && chosen < 4) { size /= 1024.0; ++chosen; }
+        while (size >= 1024.0 && chosen < 4)
+        {
+             size /= 1024.0; ++chosen;
+        }
     }
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(2) << size << " " << units[chosen];
@@ -2347,8 +3017,14 @@ inline std::string text_size(size_t bytes, const std::string& unit = "")
 
 inline std::string substring(const std::string& str, size_t start, size_t end)
 {
-    if (start >= str.size() || end < start) return "";
-    if (end >= str.size()) end = str.size() - 1;
+    if (start >= str.size() || end < start)
+    {
+        return "";
+    }
+    if (end >= str.size())
+    {
+        end = str.size() - 1;
+    }
     return str.substr(start, end - start + 1);
 }
 
@@ -2359,16 +3035,28 @@ inline std::string lines(const std::string& str, size_t start_line, size_t end_l
     std::string line;
     while (std::getline(stream, line))
     {
-        if (!line.empty() && line[line.size() - 1] == '\r') line.erase(line.size() - 1);
+        if (!line.empty() && line[line.size() - 1] == '\r')
+        {
+            line.erase(line.size() - 1);
+        }
         values.push_back(line);
     }
-    if (start_line < 1 || start_line > values.size() || start_line > end_line) return "";
-    if (end_line > values.size()) end_line = values.size();
+    if (start_line < 1 || start_line > values.size() || start_line > end_line)
+    {
+        return "";
+    }
+    if (end_line > values.size())
+    {
+        end_line = values.size();
+    }
     std::ostringstream result;
     for (size_t i = start_line - 1; i < end_line; ++i)
     {
         result << values[i];
-        if (i + 1 < end_line) result << '\n';
+        if (i + 1 < end_line)
+        {
+            result << '\n';
+        }
     }
     return result.str();
 }
