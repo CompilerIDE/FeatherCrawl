@@ -16,7 +16,6 @@
 #include <algorithm>
 #include <unordered_map>
 #include <limits>
-#include <climits>
 #include <cctype>
 
 #ifdef _MSC_VER
@@ -38,6 +37,16 @@ inline char ascii_lower(char ch)
     return ch;
 }
 
+inline std::string ascii_lower_copy(const std::string& value)
+{
+    std::string result = value;
+    for (size_t i = 0; i < result.size(); ++i)
+    {
+        result[i] = ascii_lower(result[i]);
+    }
+    return result;
+}
+
 inline bool ascii_iequals(const std::string& a, const std::string& b)
 {
     if (a.size() != b.size())
@@ -55,7 +64,7 @@ inline bool ascii_iequals(const std::string& a, const std::string& b)
     return true;
 }
 
-inline bool utf8_to_wide(const std::string& src, std::wstring& out)
+inline bool bytes_to_wide(const std::string& src, UINT codepage, std::wstring& out)
 {
     out.clear();
     if (src.empty())
@@ -67,10 +76,16 @@ inline bool utf8_to_wide(const std::string& src, std::wstring& out)
         return false;
     }
 
+    DWORD flags = 0;
+    if (codepage == CP_UTF8)
+    {
+        flags = MB_ERR_INVALID_CHARS;
+    }
+
     const int src_len = static_cast<int>(src.size());
     const int wide_len = MultiByteToWideChar(
-        CP_UTF8,
-        MB_ERR_INVALID_CHARS,
+        codepage,
+        flags,
         src.data(),
         src_len,
         NULL,
@@ -83,8 +98,8 @@ inline bool utf8_to_wide(const std::string& src, std::wstring& out)
 
     out.assign(static_cast<size_t>(wide_len), L'\0');
     const int converted = MultiByteToWideChar(
-        CP_UTF8,
-        MB_ERR_INVALID_CHARS,
+        codepage,
+        flags,
         src.data(),
         src_len,
         &out[0],
@@ -95,71 +110,515 @@ inline bool utf8_to_wide(const std::string& src, std::wstring& out)
         out.clear();
         return false;
     }
+
     return true;
 }
 
-inline std::string wide_to_output(const std::wstring& text)
+inline bool wide_to_codepage(const std::wstring& src, UINT codepage, std::string& out)
 {
-    if (text.empty())
+    out.clear();
+    if (src.empty())
     {
-        return "";
+        return true;
+    }
+    if (src.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
     }
 
-    UINT codepage = GetConsoleOutputCP();
-    if (codepage == 0)
-    {
-        codepage = GetACP();
-    }
-
-    int length = WideCharToMultiByte(
+    const int src_len = static_cast<int>(src.size());
+    const int out_len = WideCharToMultiByte(
         codepage,
         0,
-        text.data(),
-        static_cast<int>(text.size()),
+        src.data(),
+        src_len,
         NULL,
         0,
         NULL,
         NULL);
 
-    if (length <= 0 && codepage != CP_UTF8)
+    if (out_len <= 0)
+    {
+        return false;
+    }
+
+    out.assign(static_cast<size_t>(out_len), '\0');
+    const int converted = WideCharToMultiByte(
+        codepage,
+        0,
+        src.data(),
+        src_len,
+        &out[0],
+        out_len,
+        NULL,
+        NULL);
+
+    if (converted != out_len)
+    {
+        out.clear();
+        return false;
+    }
+
+    return true;
+}
+
+inline bool utf8_to_wide(const std::string& src, std::wstring& out)
+{
+    return bytes_to_wide(src, CP_UTF8, out);
+}
+
+inline std::string wide_to_utf8(const std::wstring& src)
+{
+    std::string result;
+    if (!wide_to_codepage(src, CP_UTF8, result))
+    {
+        return "";
+    }
+    return result;
+}
+
+inline UINT output_codepage()
+{
+    UINT codepage = GetConsoleOutputCP();
+    if (codepage == 0)
+    {
+        codepage = GetACP();
+    }
+    if (codepage == 0)
     {
         codepage = CP_UTF8;
-        length = WideCharToMultiByte(
-            codepage,
-            0,
-            text.data(),
-            static_cast<int>(text.size()),
-            NULL,
-            0,
-            NULL,
-            NULL);
     }
+    return codepage;
+}
 
-    if (length <= 0)
+inline std::string wide_to_output(const std::wstring& src)
+{
+    std::string result;
+    if (wide_to_codepage(src, output_codepage(), result))
     {
-        return "";
+        return result;
     }
-
-    std::string result(static_cast<size_t>(length), '\0');
-    if (WideCharToMultiByte(
-            codepage,
-            0,
-            text.data(),
-            static_cast<int>(text.size()),
-            &result[0],
-            length,
-            NULL,
-            NULL) != length)
+    if (wide_to_codepage(src, CP_UTF8, result))
     {
-        return "";
+        return result;
     }
-
-    return result;
+    return "";
 }
 
 inline std::string text(const wchar_t* value)
 {
     return wide_to_output(value ? std::wstring(value) : std::wstring());
+}
+
+inline bool is_valid_utf8(const std::string& value)
+{
+    std::wstring temp;
+    return utf8_to_wide(value, temp);
+}
+
+inline bool convert_codepage(const std::string& src, UINT from_codepage, UINT to_codepage, std::string& out)
+{
+    std::wstring wide;
+    if (!bytes_to_wide(src, from_codepage, wide))
+    {
+        return false;
+    }
+    return wide_to_codepage(wide, to_codepage, out);
+}
+
+inline std::string trim_ascii(const std::string& value)
+{
+    size_t first = 0;
+    while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first])))
+    {
+        ++first;
+    }
+
+    size_t last = value.size();
+    while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1])))
+    {
+        --last;
+    }
+
+    return value.substr(first, last - first);
+}
+
+inline std::string normalize_encoding_name(const std::string& encoding)
+{
+    std::string value = trim_ascii(encoding);
+    if (value.size() >= 2)
+    {
+        if ((value.front() == '"' && value.back() == '"') ||
+            (value.front() == '\'' && value.back() == '\''))
+        {
+            value = value.substr(1, value.size() - 2);
+        }
+    }
+
+    value = ascii_lower_copy(value);
+    for (size_t i = 0; i < value.size(); ++i)
+    {
+        if (value[i] == '_')
+        {
+            value[i] = '-';
+        }
+    }
+    return value;
+}
+
+inline bool encoding_to_codepage(const std::string& encoding, UINT& codepage)
+{
+    const std::string value = normalize_encoding_name(encoding);
+
+    if (value == "utf-8" || value == "utf8")
+    {
+        codepage = CP_UTF8;
+        return true;
+    }
+    if (value == "gbk" || value == "gb2312" || value == "cp936")
+    {
+        codepage = 936;
+        return true;
+    }
+    if (value == "gb18030" || value == "cp54936")
+    {
+        codepage = 54936;
+        return true;
+    }
+    if (value == "big5" || value == "big-5" || value == "cp950")
+    {
+        codepage = 950;
+        return true;
+    }
+    if (value == "shift-jis" || value == "shiftjis" || value == "sjis" || value == "cp932")
+    {
+        codepage = 932;
+        return true;
+    }
+    if (value == "euc-kr" || value == "cp949")
+    {
+        codepage = 949;
+        return true;
+    }
+    if (value == "iso-8859-1" || value == "latin1" || value == "latin-1")
+    {
+        codepage = 28591;
+        return true;
+    }
+    if (value == "windows-1252" || value == "cp1252")
+    {
+        codepage = 1252;
+        return true;
+    }
+
+    return false;
+}
+
+inline std::string extract_charset(const std::string& source)
+{
+    const std::string lower = ascii_lower_copy(source);
+    size_t pos = 0;
+
+    while ((pos = lower.find("charset", pos)) != std::string::npos)
+    {
+        size_t p = pos + 7;
+        while (p < lower.size() && std::isspace(static_cast<unsigned char>(lower[p])))
+        {
+            ++p;
+        }
+
+        if (p >= lower.size() || lower[p] != '=')
+        {
+            pos = p;
+            continue;
+        }
+
+        ++p;
+        while (p < source.size() && std::isspace(static_cast<unsigned char>(source[p])))
+        {
+            ++p;
+        }
+
+        if (p >= source.size())
+        {
+            return "";
+        }
+
+        char quote = 0;
+        if (source[p] == '"' || source[p] == '\'')
+        {
+            quote = source[p];
+            ++p;
+        }
+
+        const size_t start = p;
+        while (p < source.size())
+        {
+            const unsigned char ch = static_cast<unsigned char>(source[p]);
+            if (quote != 0)
+            {
+                if (source[p] == quote)
+                {
+                    break;
+                }
+            }
+            else if (std::isspace(ch) || source[p] == ';' || source[p] == '>' || source[p] == '/')
+            {
+                break;
+            }
+            ++p;
+        }
+
+        if (p > start)
+        {
+            return source.substr(start, p - start);
+        }
+
+        pos = p + 1;
+    }
+
+    return "";
+}
+
+inline std::string detect_html_charset(const std::string& body)
+{
+    if (body.empty())
+    {
+        return "";
+    }
+
+    const size_t scan_size = (std::min)(body.size(), static_cast<size_t>(16384));
+    return extract_charset(body.substr(0, scan_size));
+}
+
+inline bool is_text_content_type(const std::string& content_type)
+{
+    if (content_type.empty())
+    {
+        return false;
+    }
+
+    const std::string value = ascii_lower_copy(content_type);
+    if (value.find("text/") == 0)
+    {
+        return true;
+    }
+    if (value.find("application/json") != std::string::npos ||
+        value.find("+json") != std::string::npos ||
+        value.find("application/xml") != std::string::npos ||
+        value.find("+xml") != std::string::npos ||
+        value.find("application/javascript") != std::string::npos ||
+        value.find("application/x-javascript") != std::string::npos ||
+        value.find("application/x-www-form-urlencoded") != std::string::npos ||
+        value.find("application/graphql") != std::string::npos)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+inline bool looks_like_text(const std::string& body)
+{
+    if (body.empty())
+    {
+        return false;
+    }
+
+    size_t i = 0;
+    if (body.size() >= 3 &&
+        static_cast<unsigned char>(body[0]) == 0xEF &&
+        static_cast<unsigned char>(body[1]) == 0xBB &&
+        static_cast<unsigned char>(body[2]) == 0xBF)
+    {
+        i = 3;
+    }
+
+    while (i < body.size() && std::isspace(static_cast<unsigned char>(body[i])))
+    {
+        ++i;
+    }
+
+    if (i >= body.size())
+    {
+        return true;
+    }
+
+    const char ch = body[i];
+    return ch == '<' || ch == '{' || ch == '[' || ch == '"' || ch == '\'';
+}
+
+inline bool prepare_request_body(
+    const std::string& body,
+    const std::string& content_type,
+    std::string& prepared,
+    std::string& error)
+{
+    prepared = body;
+    error.clear();
+
+    if (body.empty() || !is_text_content_type(content_type))
+    {
+        return true;
+    }
+
+    const std::string charset = extract_charset(content_type);
+    if (!charset.empty())
+    {
+        UINT declared_codepage = 0;
+        if (encoding_to_codepage(charset, declared_codepage))
+        {
+            if (declared_codepage != CP_UTF8)
+            {
+                return true;
+            }
+
+            if (is_valid_utf8(body))
+            {
+                return true;
+            }
+
+            const UINT acp = GetACP();
+            if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared))
+            {
+                return true;
+            }
+
+            error = text(L"\u8bf7\u6c42\u4f53\u58f0\u660e\u4e3a UTF-8\uff0c\u4f46\u6570\u636e\u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u6587\u672c");
+            return false;
+        }
+    }
+
+    if (is_valid_utf8(body))
+    {
+        return true;
+    }
+
+    const UINT acp = GetACP();
+    if (acp != CP_UTF8 && convert_codepage(body, acp, CP_UTF8, prepared))
+    {
+        return true;
+    }
+
+    error = text(L"\u8bf7\u6c42\u4f53\u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u6587\u672c\uff0c\u4e5f\u65e0\u6cd5\u4ece Windows \u5f53\u524d\u7cfb\u7edf\u7f16\u7801\u8f6c\u6362\u4e3a UTF-8");
+    return false;
+}
+
+inline std::string normalize_response_body(
+    const std::string& body,
+    const std::string& content_type)
+{
+    if (body.empty())
+    {
+        return body;
+    }
+
+    const bool text_response = is_text_content_type(content_type) || looks_like_text(body);
+    if (!text_response)
+    {
+        return body;
+    }
+
+    std::string data = body;
+    if (data.size() >= 3 &&
+        static_cast<unsigned char>(data[0]) == 0xEF &&
+        static_cast<unsigned char>(data[1]) == 0xBB &&
+        static_cast<unsigned char>(data[2]) == 0xBF)
+    {
+        data.erase(0, 3);
+    }
+
+    std::string charset = extract_charset(content_type);
+    if (charset.empty())
+    {
+        charset = detect_html_charset(data);
+    }
+
+    UINT source_codepage = 0;
+    if (!charset.empty() && encoding_to_codepage(charset, source_codepage))
+    {
+        std::wstring wide;
+        if (bytes_to_wide(data, source_codepage, wide))
+        {
+            const std::string converted = wide_to_output(wide);
+            if (!converted.empty() || data.empty())
+            {
+                return converted;
+            }
+        }
+    }
+
+    if (is_valid_utf8(data))
+    {
+        std::wstring wide;
+        if (utf8_to_wide(data, wide))
+        {
+            const std::string converted = wide_to_output(wide);
+            if (!converted.empty() || data.empty())
+            {
+                return converted;
+            }
+        }
+    }
+
+    const UINT acp = GetACP();
+    if (acp != 0)
+    {
+        std::wstring wide;
+        if (bytes_to_wide(data, acp, wide))
+        {
+            const std::string converted = wide_to_output(wide);
+            if (!converted.empty() || data.empty())
+            {
+                return converted;
+            }
+        }
+    }
+
+    return data;
+}
+
+inline bool query_header_utf8(HINTERNET request, DWORD query, std::string& value)
+{
+    value.clear();
+
+    DWORD size = 0;
+    if (WinHttpQueryHeaders(
+            request,
+            query,
+            WINHTTP_HEADER_NAME_BY_INDEX,
+            WINHTTP_NO_OUTPUT_BUFFER,
+            &size,
+            WINHTTP_NO_HEADER_INDEX))
+    {
+        return true;
+    }
+
+    const DWORD error_code = GetLastError();
+    if (error_code == ERROR_WINHTTP_HEADER_NOT_FOUND)
+    {
+        return true;
+    }
+    if (error_code != ERROR_INSUFFICIENT_BUFFER || size == 0)
+    {
+        return false;
+    }
+
+    std::vector<wchar_t> buffer(static_cast<size_t>(size / sizeof(wchar_t)) + 2, L'\0');
+    DWORD actual_size = size;
+    if (!WinHttpQueryHeaders(
+            request,
+            query,
+            WINHTTP_HEADER_NAME_BY_INDEX,
+            buffer.data(),
+            &actual_size,
+            WINHTTP_NO_HEADER_INDEX))
+    {
+        return false;
+    }
+
+    value = wide_to_utf8(std::wstring(buffer.data()));
+    return true;
 }
 
 inline std::wstring winhttp_error_description(DWORD error_code)
@@ -184,6 +643,8 @@ inline std::wstring winhttp_error_description(DWORD error_code)
         return L"\u8eab\u4efd\u9a8c\u8bc1\u5931\u8d25";
     case ERROR_WINHTTP_OPERATION_CANCELLED:
         return L"\u64cd\u4f5c\u5df2\u53d6\u6d88";
+    case ERROR_WINHTTP_HEADER_NOT_FOUND:
+        return L"\u672a\u627e\u5230\u9700\u8981\u7684 HTTP \u54cd\u5e94\u5934";
     default:
         return L"WinHTTP \u8bf7\u6c42\u6267\u884c\u5931\u8d25";
     }
@@ -262,7 +723,7 @@ inline bool valid_header_value(const std::string& value)
     return true;
 }
 
-} 
+}
 
 struct Response
 {
@@ -335,12 +796,12 @@ inline bool validate_headers(const Headers& headers, std::string& error)
     {
         if (!valid_header_name(it->first))
         {
-            error = detail::text(L"\u65e0\u6548\u7684 HTTP \u8bf7\u6c42\u5934\u540d\u79f0\uff1a") + it->first;
+            error = text(L"\u65e0\u6548\u7684 HTTP \u8bf7\u6c42\u5934\u540d\u79f0\uff1a") + it->first;
             return false;
         }
         if (!valid_header_value(it->second))
         {
-            error = detail::text(L"HTTP \u8bf7\u6c42\u5934\u7684\u503c\u65e0\u6548\uff1a") + it->first;
+            error = text(L"HTTP \u8bf7\u6c42\u5934\u7684\u503c\u65e0\u6548\uff1a") + it->first;
             return false;
         }
     }
@@ -358,13 +819,13 @@ inline bool is_retryable_http_status(int status_code)
 {
     switch (status_code)
     {
-    case 408: 
-    case 425: 
-    case 429: 
-    case 500: 
-    case 502: 
-    case 503: 
-    case 504: 
+    case 408:
+    case 425:
+    case 429:
+    case 500:
+    case 502:
+    case 503:
+    case 504:
         return true;
     default:
         return false;
@@ -374,14 +835,12 @@ inline bool is_retryable_http_status(int status_code)
 inline std::string http_error_message(int status_code)
 {
     std::ostringstream oss;
-    oss << detail::text(L"HTTP \u8bf7\u6c42\u5931\u8d25\uff0c\u72b6\u6001\u7801 ") << status_code;
+    oss << text(L"HTTP \u8bf7\u6c42\u5931\u8d25\uff0c\u72b6\u6001\u7801\uff1a") << status_code;
     return oss.str();
 }
 
 inline void retry_delay(unsigned long long attempt_index)
 {
-    
-    
     unsigned long long delay_ms = 200ULL * (attempt_index + 1ULL);
     if (delay_ms > 1000ULL)
     {
@@ -390,7 +849,7 @@ inline void retry_delay(unsigned long long attempt_index)
     Sleep(static_cast<DWORD>(delay_ms));
 }
 
-} 
+}
 
 class WinHttpHandle
 {
@@ -459,25 +918,33 @@ inline Response send_request(
     }
     if (timeout_ms < 0)
     {
-        return detail::make_error_response(detail::text(L"timeout_ms \u4e0d\u80fd\u5c0f\u4e8e 0"));
+        return detail::make_error_response(detail::text(L"\u8d85\u65f6\u65f6\u95f4\u4e0d\u80fd\u5c0f\u4e8e 0"));
     }
     if (retries < 0)
     {
-        return detail::make_error_response(detail::text(L"retries \u4e0d\u80fd\u5c0f\u4e8e 0"));
+        return detail::make_error_response(detail::text(L"\u91cd\u8bd5\u6b21\u6570\u4e0d\u80fd\u5c0f\u4e8e 0"));
     }
     if (url.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
     {
         return detail::make_error_response(detail::text(L"URL \u8fc7\u957f\uff0c\u8d85\u51fa WinHTTP \u53ef\u5904\u7406\u8303\u56f4"));
-    }
-    if (body.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
-    {
-        return detail::make_error_response(detail::text(L"\u8bf7\u6c42\u4f53\u8fc7\u5927\uff0c\u8d85\u51fa\u5f53\u524d FeatherCrawl API \u53ef\u5904\u7406\u8303\u56f4"));
     }
 
     std::string header_validation_error;
     if (!detail::validate_headers(headers, header_validation_error))
     {
         return detail::make_error_response(header_validation_error);
+    }
+
+    std::string prepared_body;
+    std::string body_error;
+    if (!detail::prepare_request_body(body, headers.get("Content-Type"), prepared_body, body_error))
+    {
+        return detail::make_error_response(body_error);
+    }
+
+    if (prepared_body.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return detail::make_error_response(detail::text(L"\u8bf7\u6c42\u4f53\u8fc7\u5927\uff0c\u8d85\u51fa\u5f53\u524d FeatherCrawl API \u53ef\u5904\u7406\u8303\u56f4"));
     }
 
     const std::wstring normalized_url = detail::normalize_url_for_crack(url);
@@ -498,8 +965,7 @@ inline Response send_request(
             0,
             &url_comp))
     {
-        const DWORD error_code = GetLastError();
-        return detail::make_error_response(detail::winhttp_error(L"\u89e3\u6790 URL", error_code));
+        return detail::make_error_response(detail::winhttp_error(L"\u89e3\u6790 URL", GetLastError()));
     }
 
     if (url_comp.nScheme != INTERNET_SCHEME_HTTP &&
@@ -545,7 +1011,7 @@ inline Response send_request(
         return detail::make_error_response(detail::text(L"HTTP \u8bf7\u6c42\u5934\u4e0d\u662f\u6709\u6548\u7684 UTF-8 \u7f16\u7801"));
     }
 
-    const DWORD total_len = static_cast<DWORD>(body.size());
+    const DWORD total_len = static_cast<DWORD>(prepared_body.size());
     const unsigned long long max_attempts = static_cast<unsigned long long>(retries) + 1ULL;
     std::string last_error = detail::text(L"\u8bf7\u6c42\u5931\u8d25");
 
@@ -658,7 +1124,7 @@ inline Response send_request(
         LPVOID optional_data = WINHTTP_NO_REQUEST_DATA;
         if (total_len > 0)
         {
-            optional_data = const_cast<char*>(body.data());
+            optional_data = const_cast<char*>(prepared_body.data());
         }
 
         if (!WinHttpSendRequest(
@@ -709,10 +1175,23 @@ inline Response send_request(
         Response current;
         current.status_code = static_cast<int>(status_code);
 
+        DWORD content_length = 0;
+        DWORD content_length_size = sizeof(content_length);
+        if (WinHttpQueryHeaders(
+                request.get(),
+                WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+                WINHTTP_HEADER_NAME_BY_INDEX,
+                &content_length,
+                &content_length_size,
+                WINHTTP_NO_HEADER_INDEX))
+        {
+            current.body.reserve(static_cast<size_t>(content_length));
+        }
+
         bool read_failed = false;
         for (;;)
         {
-            char chunk[8192];
+            char chunk[16384];
             DWORD bytes_read = 0;
 
             if (!WinHttpReadData(request.get(), chunk, sizeof(chunk), &bytes_read))
@@ -739,9 +1218,14 @@ inline Response send_request(
             continue;
         }
 
-        
-        
-        
+        std::string content_type;
+        if (!detail::query_header_utf8(request.get(), WINHTTP_QUERY_CONTENT_TYPE, content_type))
+        {
+            content_type.clear();
+        }
+
+        current.body = detail::normalize_response_body(current.body, content_type);
+
         if (current.status_code >= 400)
         {
             current.error_message = detail::http_error_message(current.status_code);
@@ -751,9 +1235,6 @@ inline Response send_request(
             current.error_message = detail::text(L"\u65e0");
         }
 
-        
-        
-        
         if (detail::is_retryable_http_status(current.status_code) &&
             attempt + 1ULL < max_attempts)
         {
@@ -777,7 +1258,7 @@ inline Response send_request(
 
     Response resp;
     resp.error_message = last_error;
-    if (max_attempts > 1)
+    if (max_attempts > 1ULL)
     {
         std::ostringstream oss;
         oss << resp.error_message
@@ -854,99 +1335,21 @@ inline std::string to_utf8(const std::string& src, int codepage)
     {
         return {};
     }
-    if (src.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+
+    std::string result;
+    if (!detail::convert_codepage(src, static_cast<UINT>(codepage), CP_UTF8, result))
     {
         return src;
     }
-
-    const int src_len = static_cast<int>(src.size());
-    const DWORD flags = (codepage == CP_UTF8) ? MB_ERR_INVALID_CHARS : 0;
-
-    const int wide_len = MultiByteToWideChar(
-        codepage,
-        flags,
-        src.data(),
-        src_len,
-        NULL,
-        0);
-
-    if (wide_len <= 0)
-    {
-        return src;
-    }
-
-    std::wstring wstr(static_cast<size_t>(wide_len), L'\0');
-    if (MultiByteToWideChar(
-            codepage,
-            flags,
-            src.data(),
-            src_len,
-            &wstr[0],
-            wide_len) != wide_len)
-    {
-        return src;
-    }
-
-    const int utf8_len = WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        wstr.data(),
-        wide_len,
-        NULL,
-        0,
-        NULL,
-        NULL);
-
-    if (utf8_len <= 0)
-    {
-        return src;
-    }
-
-    std::string utf8(static_cast<size_t>(utf8_len), '\0');
-    if (WideCharToMultiByte(
-            CP_UTF8,
-            0,
-            wstr.data(),
-            wide_len,
-            &utf8[0],
-            utf8_len,
-            NULL,
-            NULL) != utf8_len)
-    {
-        return src;
-    }
-
-    return utf8;
+    return result;
 }
 
 inline std::string to_utf8(const std::string& src, const std::string& encoding)
 {
-    static const std::unordered_map<std::string, int> codepage_map =
+    UINT codepage = 0;
+    if (detail::encoding_to_codepage(encoding, codepage))
     {
-        {"UTF-8",        CP_UTF8},
-        {"GBK",          936},
-        {"GB2312",       936},
-        {"BIG5",         950},
-        {"SHIFT-JIS",    932},
-        {"EUC-KR",       949},
-        {"ISO-8859-1",   28591},
-        {"WINDOWS-1252", 1252},
-    };
-
-    std::string normalized = encoding;
-    std::transform(
-        normalized.begin(),
-        normalized.end(),
-        normalized.begin(),
-        [](unsigned char c) -> char
-        {
-            return static_cast<char>(std::toupper(c));
-        });
-
-    auto it = codepage_map.find(normalized);
-    if (it != codepage_map.end())
-    {
-        return to_utf8(src, it->second);
+        return to_utf8(src, static_cast<int>(codepage));
     }
     return src;
 }
@@ -1068,4 +1471,4 @@ inline std::string lines(const std::string& str, size_t start_line, size_t end_l
     return result.str();
 }
 
-} 
+}
