@@ -10,7 +10,7 @@
   <br>
 </p>
 
-FeatherCrawl 是一款使用了 **WinHTTP** 的网络请求库。仅需一个头文件实现在 C++ 中进行网页抓取。
+FeatherCrawl 是一款网络请求库。仅需一个头文件实现在 C++ 中进行网页抓取。
 
 此项目正在积极开发中，欢迎关注。
 
@@ -20,7 +20,7 @@ FeatherCrawl 是一款使用了 **WinHTTP** 的网络请求库。仅需一个头
 
 - 架构：WinHTTP 
 - 调用简单，仅需 `#include "feathercrawl.h"`
-- C++11 及以上，Windows 10/11 原生支持
+- C++11 及以上，Windows 10/11、Linux、macOS 原生支持
 
 ---
 
