@@ -10,7 +10,7 @@
   <br>
 </p>
 
-FeatherCrawl is a C++ network request library built on WinHTTP. It enables web scraping in C++ with a single header file.
+FeatherCrawl is a C++ network request library. It enables web scraping in C++ with a single header file.
 
 This project is under active development. Contributions and feedback are welcome.
 
@@ -20,7 +20,7 @@ This project is under active development. Contributions and feedback are welcome
 
 - Architecture: WinHTTP
 - Simple integration — only `#include "feathercrawl.h"` is required
-- C++11 or later; native support for Windows 10/11
+- C++11 or later; native support for Windows 10/11, Linux, and macOS
 
 ---
 
