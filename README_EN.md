@@ -20,7 +20,7 @@ This project is under active development. Contributions and feedback are welcome
 
 - Architecture: WinHTTP
 - Simple integration — only `#include "feathercrawl.h"` is required
-- C++11 or later; native support for Windows 10/11, Linux, and macOS
+- C++11 or later, supports running on Windows 10/11 and Linux.
 
 ---
 
