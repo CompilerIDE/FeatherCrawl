@@ -16,7 +16,7 @@ FeatherCrawl 是一款网络请求库。仅需一个头文件实现在 C++ 中�
 
 # 特性
 
-- 架构：WinHTTP 
+- 架构：WinHTTP（Windows 平台），Socket API、OpenSSL（Linux 平台）
 - 调用简单，仅需 `#include <feathercrawl.h>`
 - C++11 及以上，支持在 Windows 10/11、Linux 上运行
 
