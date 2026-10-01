@@ -131,7 +131,15 @@ string key = headers.get("content-type");
 
 返回：bool 类型。
 
-### 3.4 `clear()`
+### 3.4 `erase(key)`
+作用：删除指定请求头。
+
+示例：
+```cpp
+headers.erase("Cookie");
+```
+
+### 3.5 `clear()`
 作用：清除所有请求头
 
 示例：
@@ -139,7 +147,160 @@ string key = headers.get("content-type");
 headers.clear();
 ```
 
-## 四、会话对象
+### 3.6 `to_winhttp_string()`
+作用：转换为 WinHTTP 使用的请求头字符串格式。
+
+返回：string 类型
+
+示例：
+```cpp
+string text = headers.to_winhttp_string();
+```
+
+## 四、响应对象
+`web::Response` 表示服务器返回的数据。
+
+```cpp
+web::Response r = session.get(url);
+```
+
+返回的就是一个 Response 对象。
+
+包含：
+- HTTP 状态码
+- 响应正文
+- 响应头
+- 错误信息
+- 请求统计信息
+
+### 4.1 `ok()`
+作用：判断请求是否成功。
+
+返回：bool 类型（true 表示请求成功，false 表示请求失败）
+
+示例：
+```cpp
+web::Response r = session.get("https://example.com");
+if (r.ok())
+{
+    cout << "请求成功";
+}
+else
+{
+    cout << "请求失败";
+}
+```
+
+### 4.2 `status_code`
+作用：获取 HTTP 状态码。
+
+返回：int 类型
+
+常见值：
+|状态码|含义   |
+|:-:|:---:|
+|200|成功   |
+|301|永久重定向|
+|302|临时重定向|
+|400|请求错误 |
+|403|禁止访问 |
+|404|不存在  |
+|500|服务器错误|
+
+示例：
+```cpp
+web::Response r = session.get("https://example.com");
+cout << r.status_code;
+```
+
+### 4.3 `body`
+作用：返回服务器保存的正文内容（例如网页源代码）。
+
+类型：string 类型
+
+示例：
+```cpp
+web::Response r = session.get("https://example.com");
+cout << r.body;
+```
+
+### 4.4 `headers`
+作用：获取服务器返回的响应头。
+
+类型：ResponseHeaders
+
+示例：
+```cpp
+web::Response r = session.get("https://example.com");
+string type = r.headers.get("Content-Type");
+```
+
+### 4.5 `error_code`
+作用：获取错误类型。
+
+示例：
+```cpp
+if(!r.ok())
+{
+    auto erc = r.error_code;
+}
+```
+
+### 4.6 `error_message`
+作用：获取错误描述。
+
+类型：string 类型
+
+示例：
+```cpp
+if(!r.ok())
+{
+    cerr << r.error_message;
+}
+```
+
+### 4.7 `final_url`
+作用：获取最终访问地址，适用于 HTTP 重定向或会自动跳转的网页。
+
+类型：string 类型
+
+示例：
+```cpp
+web::Response r = session.get("https://example.com");
+cout << r.final_url;
+```
+
+### 4.8 `received_bytes`
+作用：获取收到的数据大小。
+
+类型：size_t 类型
+
+示例：
+```cpp
+cout << r.received_bytes << " bytes";
+```
+
+### 4.9 `attempts`
+作用：获取实际请求次数。
+
+类型：int 类型
+
+示例：
+```cpp
+cout << "请求次数:" << r.attempts;
+```
+
+### 4.10 `redirect_count`
+作用：获取重定向次数
+
+类型：int 类型
+
+示例：
+```cpp
+cout << r.redirect_count;
+```
+
+## 五、网络会话
 
 ---
 
