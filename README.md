@@ -302,6 +302,52 @@ cout << r.redirect_count;
 
 ## 五、网络会话
 
+### 5.1 `Session()`
+作用：创建一个默认网络会话。
+
+示例：
+```cpp
+web::Session session;
+```
+
+### 5.2 `Session(options)`
+作用：使用配置创建 Session。
+
+参数：SessionOptions
+
+示例：
+```cpp
+web::SessionOptions opt;
+opt.user_agent = L"MyCrawler/1.0";
+web::Session session(opt);
+```
+
+### 5.3 `get(url)`
+作用：发送 GET 请求。
+
+参数：
+|参数 |类型    |说明  |
+|:-:|:----:|:--:|
+|url|string|请求地址|
+
+返回：Response
+
+示例：
+```cpp
+web::Session session;
+web::Response r = session.get("https://example.com");
+```
+
+### 5.4 `get(url, headers)`
+作用：带请求头发送 GET。
+
+示例：
+```cpp
+web::Headers h;
+h.set("User-Agent", "MyBot");
+web::Response r = Session.get("https://example.com", h);
+```
+
 ---
 
 <h3 align="center">FeatherCrawl —— 让 C++ 爬虫变得简单而强大。</h3>
