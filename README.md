@@ -31,35 +31,9 @@ FeatherCrawl 使用 [Apache License 2.0](LICENSE) 开源。
 
 # 零、安装 FeatherCrawl
 
-FeatherCrawl 是**单头文件库**，无需构建、无需安装，把 `feathercrawl.h` 放到工程里即可使用。
+FeatherCrawl 是**单头文件库**，无需构建、无需安装（也可以选择通过官方构建好的安装包进行快速安装）。
 
-## 0.1 目录结构
-
-推荐把 `feathercrawl.h` 放在工程的 `include/` 目录下：
-
-```text
-FeatherDemo/
-├── include/
-│   └── feathercrawl.h
-├── main.cpp
-└── CMakeLists.txt
-```
-
-然后在源码中：
-
-```cpp
-#include <feathercrawl.h>
-```
-
-只要 `include/` 目录被加入头文件搜索路径，`<...>` 形式就能找到该文件。也可以使用：
-
-```cpp
-#include "feathercrawl.h"
-```
-
-两种写法都可以，取决于工程的头文件搜索路径配置。
-
-## 0.2 各平台编译命令
+## 0.1 各平台编译命令
 
 | 平台 | 命令 |
 |------|------|
@@ -67,7 +41,7 @@ FeatherDemo/
 | Windows / MinGW / TDM-GCC | 需添加 `-lwinhttp` 编译参数 |
 | Linux | 需添加 `-lssl -lcrypto -pthread`（部分发行版若使用 iconv 需额外 `-liconv`） |
 
-## 0.3 CMake 示例
+## 0.2 CMake 示例
 
 ```cmake
 cmake_minimum_required(VERSION 3.10)
@@ -93,13 +67,6 @@ elseif (UNIX AND NOT APPLE)
     target_link_libraries(FeatherDemo PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
 endif()
 ```
-
-## 0.4 Visual Studio 添加头文件路径
-
-1. 右键工程 → 属性
-2. C/C++ → 常规 → 附加包含目录
-3. 添加 `$(ProjectDir)include`
-4. 应用并确定
 
 ---
 
