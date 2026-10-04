@@ -29,47 +29,6 @@ FeatherCrawl 使用 [Apache License 2.0](LICENSE) 开源。
 
 ---
 
-# 零、安装 FeatherCrawl
-
-FeatherCrawl 是**单头文件库**，无需构建、无需安装（也可以选择通过官方构建好的安装包进行快速安装）。
-
-## 0.1 各平台编译命令
-
-| 平台 | 命令 |
-|------|------|
-| Windows / MSVC | 直接编译，自动链接 `winhttp.lib`（启用 WebView2 时还会自动链接 `user32.lib`、`advapi32.lib`） |
-| Windows / MinGW / TDM-GCC | 需添加 `-lwinhttp` 编译参数 |
-| Linux | 需添加 `-lssl -lcrypto -pthread`（部分发行版若使用 iconv 需额外 `-liconv`） |
-
-## 0.2 CMake 示例
-
-```cmake
-cmake_minimum_required(VERSION 3.10)
-project(FeatherDemo CXX)
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-add_executable(FeatherDemo main.cpp)
-
-# 头文件路径
-target_include_directories(FeatherDemo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-if (WIN32)
-    if (MSVC)
-        # MSVC 下 feathercrawl.h 已使用 #pragma comment(lib, ...) 自动链接
-    else()
-        target_link_libraries(FeatherDemo PRIVATE winhttp)
-    endif()
-elseif (UNIX AND NOT APPLE)
-    find_package(OpenSSL REQUIRED)
-    find_package(Threads REQUIRED)
-    target_link_libraries(FeatherDemo PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
-endif()
-```
-
----
-
 # 一、快速上手
 
 ## 1.1 最小可运行程序
@@ -103,7 +62,12 @@ int main()
 | `web::Headers` | 用户发送的**请求头** |
 | `web::Response` | 服务端返回的结果（状态码、响应体、响应头、错误等） |
 
-> 注意：请求头 `Headers` 与响应头 `ResponseHeaders` 是**两个不同类型**。`Session` 相关接口使用 `Headers`，`Response::headers` 是 `ResponseHeaders`，两者用途不同，不要混用。
+> 注意：请求头 `Headers` 与响应头 `ResponseHeaders` 是**两个不同类型**。
+>
+> - `Headers::fields` 是 `std::unordered_map<std::string, std::string>`
+> - `ResponseHeaders::fields` 是 `std::unordered_map<std::string, std::vector<std::string>>`
+>
+> `Session` 相关接口使用 `Headers`，`Response::headers` 是 `ResponseHeaders`，两者用途不同，不要混用。
 
 ---
 
@@ -113,7 +77,7 @@ FeatherCrawl 支持手动切换语言，支持中文与英文，默认语言为�
 
 ## 2.1 `web::set_default_language(lang)`
 
-作用：设置全局默认语言。该语言会被所有 Session 继承（除非 Session 自己另外设置）。
+作用：设置全局默认语言。**该设置只影响之后创建的 Session，不影响已创建的 Session**（Session 在构造时会拷贝一份当前全局语言）。
 
 参数：`lang` —— `"zh_CN"` 或 `"en_US"`（也接受 `"zh"`、`"cn"`、`"chinese"` 等别名）。
 
@@ -121,12 +85,16 @@ FeatherCrawl 支持手动切换语言，支持中文与英文，默认语言为�
 
 ```cpp
 web::set_default_language("zh_CN");
+web::Session a;               // a 使用 zh_CN
+
 web::set_default_language("en_US");
+web::Session b;               // b 使用 en_US
+                              // a 仍然是 zh_CN，不受影响
 ```
 
 ## 2.2 `web::set_language(lang)`
 
-作用：与 `web::set_default_language` 等价，设置全局默认语言。
+作用：与 `web::set_default_language` 等价，设置全局默认语言，只影响之后创建的 Session。
 
 ```cpp
 web::set_language("zh_CN");
@@ -151,13 +119,20 @@ session.set_language("zh_CN");
 
 继承规则：
 
-- 如果 Session 通过 `set_language()` 设置过，则返回设置值；
-- 否则返回全局默认语言（由 `web::set_default_language()` 设定，默认是 `"en_US"`）。
+- Session 在**构造时**拷贝一份全局默认语言，之后不再随全局默认语言变化；
+- 若之后调用过 `Session::set_language()`，则以最后一次设置值为准。
 
 ```cpp
-web::Session s;
-cout << s.language() << endl;
+web::set_default_language("zh_CN");
+web::Session s;                         // s.language() == "zh_CN"
+
+web::set_default_language("en_US");
+cout << s.language() << endl;           // 仍为 zh_CN
 ```
+
+## 2.5 一个已知细节
+
+`Session::error_message()` 在 Windows 端若会话初始化失败，可能会直接返回初始化时生成的错误信息，而**不进入会话语言上下文**。也就是说，此时错误信息语言可能不等于 `Session::set_language()` 设定的语言。
 
 ---
 
@@ -165,7 +140,7 @@ cout << s.language() << endl;
 
 `web::Headers` 用于保存**请求头**，提供大小写不敏感的键值查询接口。
 
-> 关于请求头与响应头的区别见 1.2 章节的说明。
+> `Headers` 与 `ResponseHeaders` 是不同结构，详见 1.2 节。
 
 ## 3.1 `set(key, value)`
 
@@ -218,9 +193,14 @@ headers.clear();
 
 ## 3.6 `to_winhttp_string()`
 
-作用：将请求头转换为 `"Key: Value\r\n"` 拼接的字符串形式（Windows 端提交给 WinHTTP，Linux 端用于构造请求报文）。
+作用：将请求头转换为 `"Key: Value\r\n"` 拼接的字符串形式。
 
 返回：`std::string`。
+
+平台差异：
+
+- Windows 端用于提交给 WinHTTP 的追加头字符串。
+- Linux 端提供该接口保持兼容，但 Linux 内部实现**并未调用它**，而是直接遍历 `headers.fields` 拼接请求。
 
 ```cpp
 string text = headers.to_winhttp_string();
@@ -523,7 +503,7 @@ s.set_language("zh_CN");
 
 ## 5.9 `language()`
 
-作用：获取当前语言（可能继承全局默认语言）。
+作用：获取当前语言（构造时拷贝的全局默认语言，或之后显式设置的值）。
 
 返回：`std::string`。
 
@@ -551,8 +531,24 @@ session.clear_cookies();
 | `size_t cookie_count()` | 返回 Cookie 数量 |
 | `void set_cookies_enabled(bool enabled, bool clear_when_disabled = true)` | 启用或禁用 Cookie |
 | `bool cookies_enabled() const` | 返回是否启用 Cookie |
-| `size_t connection_count()` | 返回连接池中的连接数（Linux 端始终为 0） |
+| `size_t connection_count()` | 返回连接池中的连接数（**Linux 端恒为 0**，因为 Linux 端每次请求新建连接，无连接池） |
 | `void set_proxy(proxy, bypass = "")` | 设置代理 |
+
+### 关于 `set_proxy`
+
+签名是：
+
+```cpp
+void set_proxy(const std::string& proxy, const std::string& bypass = "");
+```
+
+两个参数都是 **`std::string`**（Windows 端内部按 UTF-8 转换到宽字符），**不是 `std::wstring`**。这与 `SessionOptions::proxy`（`std::wstring`）不同，使用时请注意区分。
+
+```cpp
+web::Session s;
+s.set_proxy("http://127.0.0.1:7890");                 // 正确：std::string
+// s.set_proxy(L"http://127.0.0.1:7890");             // 错误：不能传 wstring
+```
 
 ---
 
@@ -567,7 +563,10 @@ session.clear_cookies();
 - 单次请求最大响应大小
 - 重试策略
 
-> 注意：`RequestOptions::max_response_size` 是**单次请求限制**；`SessionOptions::max_response_size` 是**会话默认值**，仅在没有指定 `RequestOptions` 时被使用。
+> 关于 `max_response_size` 的继承规则：
+> `RequestOptions::max_response_size` 与 `SessionOptions::max_response_size` 的关系是：
+> **当 `RequestOptions::max_response_size == 0`（默认值）时，使用 `SessionOptions::max_response_size`**；
+> 只有当 `RequestOptions::max_response_size` 显式设为一个非 0 值时，才使用该次请求的值。
 
 示例：
 
@@ -581,9 +580,14 @@ web::Response r = session.get("https://example.com", web::Headers(), options);
 
 作用：设置请求超时时间。
 
-单位：毫秒。默认 `0`（使用系统默认超时）。
+单位：毫秒。默认 `0`。
 
 类型：`int`。
+
+`0` 表示**不显式设置超时**，具体行为平台相关：
+
+- Windows：`WinHttpSetTimeouts` 只在 `timeout_ms > 0` 时调用，否则走 WinHTTP 默认行为。
+- Linux：连接阶段 `poll` 默认约 30 秒；读写阶段不会设置 `SO_RCVTIMEO` / `SO_SNDTIMEO`，因此行为取决于系统 TCP 栈。
 
 ```cpp
 web::RequestOptions opt;
@@ -605,7 +609,7 @@ opt.follow_redirect = true;
 
 作用：设置最大重定向次数。
 
-类型：`int`，默认 `-1`（继承 `SessionOptions::max_redirects`，最终值为 10）。
+类型：`int`，默认 `-1`（回落为 `SessionOptions::max_redirects`，其默认值为 `10`）。
 
 ```cpp
 web::RequestOptions opt;
@@ -616,16 +620,20 @@ opt.max_redirects = 10;
 
 作用：**单次请求**限制服务器返回数据大小。
 
-单位：字节。默认 `0`（使用 `SessionOptions::max_response_size`，默认 64 MB）。
+单位：字节。默认 `0`。
 
 类型：`size_t`。
 
+当值为 `0` 时，使用 `SessionOptions::max_response_size`（默认 64 MiB）。
+
 ```cpp
 web::RequestOptions opt;
-opt.max_response_size = 1024 * 1024; // 最大 1MB
+opt.max_response_size = 1024 * 1024; // 最大 1 MiB
 ```
 
 超过限制时，请求失败。
+
+> 注意：`RequestOptions::max_response_size` 在**下载路径中基本不生效**，下载大小限制请使用 `DownloadOptions::max_file_size`。
 
 ## 6.5 `retry`
 
@@ -661,7 +669,7 @@ opt.retry.retries = 3;
 | `jitter` | `bool` | `true` | 是否加入随机抖动 |
 | `respect_retry_after` | `bool` | `true` | 是否尊重 `Retry-After` 响应头 |
 | `retry_non_idempotent` | `bool` | `false` | 是否允许非幂等方法（如 POST）重试 |
-| `allow_automatic_authentication` | `bool` | `false` | 是否允许 WinHTTP 自动认证 |
+| `allow_automatic_authentication` | `bool` | `false` | 是否允许 WinHTTP 自动认证（**仅 Windows/WinHTTP 有效**，Linux 端字段存在但不使用） |
 
 ## 7.1 `retries`
 
@@ -796,12 +804,12 @@ web::Session session(opt);
 |------|------|-------|------|
 | `user_agent` | `std::wstring` | `L"FeatherCrawl/2.0"` | 默认 User-Agent |
 | `enable_cookies` | `bool` | `true` | 是否启用 Cookie |
-| `access_type` | `DWORD` | `WINHTTP_ACCESS_TYPE_DEFAULT_PROXY` | WinHTTP 访问类型（Windows） |
+| `access_type` | `DWORD` | `WINHTTP_ACCESS_TYPE_DEFAULT_PROXY` | WinHTTP 访问类型（**仅 Windows**） |
 | `proxy` | `std::wstring` | 空 | 代理服务器 |
 | `proxy_bypass` | `std::wstring` | 空 | 代理绕过列表 |
-| `max_response_size` | `size_t` | 64 MB | 默认最大响应大小 |
+| `max_response_size` | `size_t` | 64 MiB | 默认最大响应大小 |
 | `max_redirects` | `int` | `10` | 默认最大重定向次数 |
-| `max_connections` | `size_t` | `64` | 连接池上限（Windows） |
+| `max_connections` | `size_t` | `64` | 连接池上限（**Windows**；Linux 端未使用） |
 
 ## 9.1 `user_agent`
 
@@ -832,6 +840,8 @@ opt.enable_cookies = true;
 
 类型：`std::wstring`。
 
+> 注意：`SessionOptions::proxy` 是 `std::wstring`，而 `Session::set_proxy()` 的参数是 `std::string`，二者不同。
+
 ```cpp
 web::SessionOptions opt;
 opt.proxy = L"http://127.0.0.1:7890";
@@ -842,11 +852,11 @@ web::Session s(opt);
 
 作用：设置会话默认最大响应大小。
 
-类型：`size_t`。
+类型：`size_t`。默认 64 MiB（`64ULL * 1024ULL * 1024ULL`）。
 
 ```cpp
 web::SessionOptions opt;
-opt.max_response_size = 64 * 1024 * 1024; // 最大 64MB
+opt.max_response_size = 64 * 1024 * 1024; // 64 MiB
 ```
 
 ---
@@ -867,6 +877,9 @@ FeatherCrawl 提供专用下载接口，用于：
 | `DownloadOptions` | 下载配置 |
 | `DownloadResult` | 下载结果 |
 | `download()` | 执行下载 |
+
+> **下载文件大小限制使用 `DownloadOptions::max_file_size`**。
+> `DownloadOptions::request.max_response_size` 在下载路径中**不会**被用于限制文件大小，请勿混淆。
 
 ## 10.1 `download(url, filename, headers, options)`
 
@@ -989,7 +1002,7 @@ opt.request.retry.retries = 5;
 
 | 字段 | 类型 | 默认值 | 作用 |
 |------|------|-------|------|
-| `max_file_size` | `uint64_t` | 1 GB | 允许下载的最大文件大小 |
+| `max_file_size` | `uint64_t` | 1 GiB（`1024ULL * 1024ULL * 1024ULL`） | 允许下载的最大文件大小（**下载大小限制请使用此字段**） |
 | `progress_bar_width` | `size_t` | `20` | 进度条宽度 |
 | `progress_refresh_ms` | `unsigned int` | `100` | 进度刷新间隔（毫秒） |
 
@@ -1062,7 +1075,7 @@ if (!result.ok())
 | `status_code` | `int` | HTTP 状态码 |
 | `headers` | `ResponseHeaders` | 响应头 |
 | `error_code` | `ErrorCode` | 错误码 |
-| `native_error_code` | `DWORD` | 底层错误码 |
+| `native_error_code` | `DWORD` | 底层错误码（Linux 端 `DWORD` 是 `unsigned long` 的别名，其值可能来自 `errno`、`getaddrinfo` 返回值或 OpenSSL 错误码） |
 | `file_size_known` | `bool` | 文件总大小是否已知 |
 | `attempts` | `int` | 实际请求次数 |
 | `redirect_count` | `int` | 重定向次数 |
@@ -1145,7 +1158,12 @@ std::string part = web::lines("a\nb\nc", 2, 3); // "b\nc"
 
 在 Windows 平台上，FeatherCrawl 可选支持 Microsoft Edge WebView2，用于打开网页或渲染 HTML。
 
-> **平台限制**：`browse()` 与 `render_html()` 只在 **Windows** 平台上真正实现。**Linux** 平台不提供 WebView2 渲染功能，调用这两个函数会返回 `BrowserErrorCode::UnsupportedPlatform`；同时 `webview2_available()` 恒为 `false`，`webview2_runtime_version()` 返回空字符串。**macOS 未支持**。
+> **平台限制**：`browse()` 与 `render_html()` 只在 **Windows** 平台上真正实现。
+>
+> - Linux：调用返回 `BrowserErrorCode::UnsupportedPlatform`，`webview2_available()` 恒为 `false`，`webview2_runtime_version()` 返回空字符串。
+> - macOS：不支持，且头文件本身会 `#error`，无法编译。
+
+> **阻塞语义**：`browse()` 与 `render_html()` 在 Windows 端会创建窗口并进入消息循环，**阻塞当前线程直到窗口关闭才返回**。如需并发，请放到独立线程中调用。
 
 ## 15.1 `webview2_available()`
 
@@ -1173,7 +1191,7 @@ std::wcout << version << std::endl;
 
 ## 15.3 `browse(url, options)`
 
-作用：打开一个窗口浏览指定 URL。
+作用：打开一个窗口浏览指定 URL。**阻塞到窗口关闭后返回。**
 
 ```cpp
 web::BrowserOptions opt;
@@ -1190,7 +1208,9 @@ if (!r.ok())
 
 ## 15.4 `render_html(html, options)`
 
-作用：渲染一段 HTML 字符串。
+作用：渲染一段 HTML 字符串。**阻塞到窗口关闭后返回。**
+
+大小限制：约 2 MiB（UTF-8 形式 `> 2 * 1024 * 1024`；宽字符形式 `> (2 * 1024 * 1024) / sizeof(wchar_t)`）。
 
 ```cpp
 web::BrowserResult r = web::render_html("<h1>Hello</h1>");
@@ -1213,7 +1233,7 @@ if (!r.ok())
 | `context_menus_enabled` | `bool` | `true` | 是否启用右键菜单 |
 | `status_bar_enabled` | `bool` | `true` | 是否启用状态栏 |
 | `default_script_dialogs_enabled` | `bool` | `true` | 是否启用默认脚本对话框 |
-| `user_data_folder` | `std::wstring` | 空 | 用户数据目录 |
+| `user_data_folder` | `std::wstring` | 空 | 用户数据目录。**为空时库会创建临时目录，并在窗口关闭后自动清理** |
 | `browser_executable_folder` | `std::wstring` | 空 | 浏览器可执行文件目录 |
 
 ## 15.6 `BrowserResult`
@@ -1221,7 +1241,7 @@ if (!r.ok())
 | 字段 | 类型 | 作用 |
 |------|------|------|
 | `error_code` | `BrowserErrorCode` | 错误码 |
-| `native_error_code` | `HRESULT` | 底层错误码 |
+| `native_error_code` | Windows 下 `HRESULT`；Linux 下 `long` | 底层错误码 |
 | `error_message` | `std::string` | 错误描述 |
 | `exit_code` | `int` | 窗口退出码 |
 | `runtime_version` | `std::wstring` | WebView2 运行时版本 |
@@ -1229,77 +1249,7 @@ if (!r.ok())
 
 ---
 
-# 十六、完整工程示例
-
-一个最小的完整工程结构：
-
-```text
-FeatherDemo/
-├── include/
-│   └── feathercrawl.h
-├── main.cpp
-└── CMakeLists.txt
-```
-
-`main.cpp`：
-
-```cpp
-#include <feathercrawl.h>
-#include <iostream>
-
-int main()
-{
-    web::Session session;
-    web::Response r = session.get("https://example.com");
-
-    if (r.ok())
-    {
-        std::cout << r.body << std::endl;
-    }
-    else
-    {
-        std::cerr << r.error_message << std::endl;
-        return 1;
-    }
-    return 0;
-}
-```
-
-`CMakeLists.txt`：
-
-```cmake
-cmake_minimum_required(VERSION 3.10)
-project(FeatherDemo CXX)
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-add_executable(FeatherDemo main.cpp)
-target_include_directories(FeatherDemo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-if (WIN32)
-    if (NOT MSVC)
-        target_link_libraries(FeatherDemo PRIVATE winhttp)
-    endif()
-elseif (UNIX AND NOT APPLE)
-    find_package(OpenSSL REQUIRED)
-    find_package(Threads REQUIRED)
-    target_link_libraries(FeatherDemo PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
-endif()
-```
-
-构建：
-
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
-```
-
----
-
-# 十七、常见问题（FAQ）
+# 十六、常见问题（FAQ）
 
 **Q1：Linux 编译失败，提示找不到 OpenSSL 符号？**
 
@@ -1350,6 +1300,18 @@ opt.request.timeout_ms = 30000;
 **Q8：`browse()` / `render_html()` 在 Linux 上返回 `UnsupportedPlatform`？**
 
 A：WebView2 渲染功能**仅支持 Windows**。Linux 上这两个函数只返回错误码，不会打开窗口。
+
+**Q9：修改了全局默认语言，为什么已有 Session 的语言没变？**
+
+A：Session 在构造时拷贝当时全局默认语言。要改变已有 Session 的语言，请调用 `Session::set_language()`。
+
+**Q10：macOS 上能用吗？**
+
+A：不能。macOS 不是“未支持”，而是**包含头文件会直接 `#error` 编译失败**。
+
+**Q11：`browse()` / `render_html()` 会卡住主线程吗？**
+
+A：会。这两个函数在 Windows 端会进入消息循环，**阻塞当前线程直到窗口关闭**。如需并发请放到独立线程中调用。
 
 ---
 
