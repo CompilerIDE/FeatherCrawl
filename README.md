@@ -348,6 +348,544 @@ h.set("User-Agent", "MyBot");
 web::Response r = Session.get("https://example.com", h);
 ```
 
+### 5.5 `get(url, headers, options)`
+
+作用：完整 GET 请求。
+
+参数：
+| 参数      | 类型               |
+| ------- | ---------------- |
+| url     | `std::string`    |
+| headers | `Headers`        |
+| options | `RequestOptions` |
+
+示例：
+```cpp
+web::RequestOptions opt;
+opt.timeout_ms = 5000;
+web::Response r = session.get("https://example.com", web::Headers(), opt);
+```
+
+### 5.6 `post(url, body, content_type)`
+
+作用：发送 POST 请求。
+
+参数：
+| 参数           | 说明    |
+| ------------ | ----- |
+| url          | 请求地址  |
+| body         | 发送的数据 |
+| content_type | 数据类型  |
+
+返回：Response
+
+示例：
+```cpp
+web::Session session;
+web::Response r = session.post("https://example.com/api", R"({"id":1})", "application/json");
+```
+
+### 5.7 `cookies()`
+
+作用：获取当前会话的 Cookie 管理器。
+
+返回：`CookieJar&`
+
+示例：
+```cpp
+web::Session s;
+auto& jar = s.cookies();
+cout << jar.size();
+```
+
+### 5.8 `set_language(lang)`
+
+作用：设置当前会话错误语言。
+
+参数：string
+
+示例：
+
+```cpp
+web::Session s;
+s.set_language("zh_CN");
+```
+
+### 5.9 `language()`
+
+作用：获取当前语言。
+
+返回：string 类型
+
+示例：
+```cpp
+cout << s.language();
+```
+
+---
+
+### 5.10 `Session::clear_cookies()
+
+作用：
+
+清除当前 Session 保存的 Cookie。
+
+示例：
+
+```cpp
+session.clear_cookies();
+```
+
+## 六、请求配置
+
+`web::RequestOptions` 用于控制一次 HTTP 请求的行为。
+
+可以设置：
+
+- 超时时间
+- 自动重定向
+- 最大响应大小
+- 重试策略
+
+示例：
+
+```cpp
+web::RequestOptions options;
+options.timeout_ms = 5000;
+web::Response r = session.get("https://example.com", web::Headers(), options);
+```
+
+---
+
+### 6.1 `timeout_ms`
+
+作用：设置请求超时时间。
+
+单位：毫秒。
+
+类型：int 类型
+
+示例：
+
+```cpp
+web::RequestOptions opt;
+opt.timeout_ms = 10000;
+```
+
+### 6.2 `follow_redirect`
+
+作用：是否自动跟随 HTTP 重定向。
+
+类型：bool 类型
+
+示例：
+```cpp
+web::RequestOptions opt;
+opt.follow_redirect = true;
+```
+
+### 6.3 `max_redirects`
+
+作用：设置最大重定向次数。
+
+类型：int 类型
+
+示例：
+```cpp
+web::RequestOptions opt;
+opt.max_redirects = 10;
+```
+
+### 6.4 `max_response_size`
+
+作用：限制服务器返回数据大小。
+
+单位：字节。
+
+类型：size_t 类型
+
+示例：
+
+```cpp
+web::RequestOptions opt;
+opt.max_response_size = 1024 * 1024; // 最大 1MB
+```
+
+超过限制时，请求失败。
+
+### 6.5 `retry`
+
+作用：设置自动重试策略。
+
+类型：RetryPolicy
+
+示例：
+```cpp
+web::RequestOptions opt;
+opt.retry.retries = 3;
+```
+
+## 七、自动重试
+
+`web::RetryPolicy` 用于网络不稳定环境。
+
+例如：
+
+- 网络波动
+- 临时服务器错误
+- 超时
+
+---
+
+### 7.1 `retries`
+
+作用：设置最大重试次数。
+
+类型：int 类型
+
+示例：
+```cpp
+web::RequestOptions opt;
+opt.retry.retries = 5;
+```
+
+
+### 7.2 `initial_delay_ms`
+
+作用：第一次重试等待时间。
+
+单位：毫秒。
+
+示例：
+```cpp
+opt.retry.initial_delay_ms = 500;
+```
+
+### 7.3 `max_delay_ms`
+
+作用：限制最大等待时间。
+
+示例：
+```cpp
+opt.retry.max_delay_ms = 5000;
+```
+
+### 7.4 `multiplier`
+
+作用：设置等待时间增长倍数。
+
+类型：double 类型
+
+示例：
+
+```cpp
+opt.retry.multiplier = 2.0;
+```
+
+## 八、Cookie 管理
+
+`web::CookieJar` 用于管理 Session 中保存的 Cookie。
+
+通常由：
+
+```cpp
+Session::cookies()
+```
+
+获得。
+
+---
+
+### 8.1 `size()`
+
+作用：返回 Cookie 数量。
+
+返回：size_t 类型
+
+示例：
+```cpp
+auto count = session.cookies().size();
+cout << count;
+```
+
+### 8.2 `clear()`
+
+作用：清空所有 Cookie。
+
+示例：
+```cpp
+session.cookies().clear();
+```
+
+### 8.3 `delete_cookie(name)`
+
+作用：删除指定 Cookie。
+
+参数 name 类型：string 类型
+
+示例：
+```cpp
+session.cookies().delete_cookie("sessionid");
+```
+
+### 8.4 Cookie 自动保存
+
+Session 默认会保存服务器返回的 Cookie。
+
+示例：
+
+```cpp
+web::Session session;
+// 登录
+session.post("https://example.com/login", "user=test", "application/x-www-form-urlencoded");
+// 后续请求自动携带 Cookie
+web::Response r = session.get("https://example.com/user");
+```
+
+## 九、会话配置
+
+`web::SessionOptions` 用于创建 Session 时设置默认行为。
+
+示例：
+
+```cpp
+web::SessionOptions opt;
+web::Session session(opt);
+```
+
+---
+
+### 9.1 `user_agent`
+
+作用：设置默认 User-Agent。
+
+类型：wstring 类型
+
+示例：
+```cpp
+web::SessionOptions opt;
+opt.user_agent = L"MyCrawler/1.0";
+web::Session s(opt);
+```
+
+### 9.2 `enable_cookies`
+
+作用：是否启用 Cookie。
+
+类型：bool 类型
+```
+
+示例：
+```cpp
+web::SessionOptions opt;
+opt.enable_cookies = true;
+```
+
+### 9.3 `proxy`
+
+作用：设置代理服务器。
+
+类型：wstring 类型
+
+示例：
+
+```cpp
+web::SessionOptions opt;
+opt.proxy = L"http://127.0.0.1:7890";
+web::Session s(opt);
+```
+
+### 9.4 `max_response_size`
+
+作用：设置默认最大响应大小。
+
+类型：size_t 类型
+
+示例：
+```cpp
+web::SessionOptions opt;
+opt.max_response_size = 64 * 1024 * 1024; // 表示最大 64MB
+```
+
+## 十、文件下载系统
+
+`FeatherCrawl` 提供专用下载接口，用于：
+
+- 下载普通文件
+- 下载大文件
+- 显示下载进度
+- 获取下载统计信息
+
+核心对象：
+
+| 对象                    | 作用   |
+| --------------------- | ---- |
+| `DownloadOptions`     | 下载配置 |
+| `DownloadResult`      | 下载结果 |
+| `download()` | 执行下载 |
+
+---
+
+### 10.1 `download(url, filename, options)`
+
+作用：下载文件到本地。
+
+参数：
+| 参数       | 类型                | 说明   |
+| -------- | ----------------- | ---- |
+| url      | `std::string`     | 文件地址 |
+| filename | `std::string`     | 保存路径 |
+| options  | `DownloadOptions` | 下载配置 |
+
+返回：DownloadResult
+
+示例：
+```cpp
+#include <feathercrawl.h>
+#include <iostream>
+using namespace std;
+int main()
+{
+    web::Session session;
+    web::DownloadOptions opt;
+    web::DownloadResult r = session.download("https://example.com/test.zip", "test.zip", opt);
+    if(r.ok())
+    {
+        cout << "下载完成";
+    }
+}
+```
+
+---
+
+## 十一、下载配置
+
+### 11.1 `show_progress`
+
+作用：是否显示下载进度。
+
+类型：bool 类型
+
+示例：
+```cpp
+web::DownloadOptions opt;
+opt.show_progress = true;
+```
+
+### 11.2 `timeout_ms`
+
+作用：设置下载超时时间。
+
+单位：毫秒。
+
+类型：int 类型
+
+示例：
+```cpp
+web::DownloadOptions opt;
+opt.timeout_ms = 30000;
+```
+
+### 11.3 `overwrite`
+
+作用：是否覆盖已有文件。
+
+类型：bool 类型
+
+示例：
+```cpp
+web::DownloadOptions opt;
+opt.overwrite = true;
+```
+
+### 12.4 `buffer_size`
+
+作用：设置下载缓冲区大小。
+
+单位：字节。
+
+类型：size_t 类
+
+示例：
+```cpp
+web::DownloadOptions opt;
+opt.buffer_size = 1024 * 1024;
+```
+
+### 12.5 `retry`
+
+作用：设置下载失败重试。
+
+类型：RetryPolicy
+
+示例：
+```cpp
+web::DownloadOptions opt;
+opt.retry.retries = 5;
+```
+
+## 十二、下载结果
+
+### 12.1 `ok()`
+
+作用：判断下载是否成功。
+
+返回：bool 类型
+
+示例：
+```cpp
+if (result.ok())
+{
+    cout << "成功";
+}
+```
+
+### 12.2 `bytes_written`
+
+作用：实际写入文件大小。
+
+类型：size_t 类型
+
+示例：
+```cpp
+cout << result.bytes_written;
+```
+
+### 12.3 `file_size`
+
+作用：文件总大小。
+
+类型：size_t 类型
+
+示例：
+```cpp
+cout << result.file_size;
+```
+
+### 12.4 `destination`
+
+作用：保存文件路径。
+
+类型：string 类型
+
+示例：
+```cpp
+cout << result.destination;
+```
+
+### 12.5 `error_message`
+
+作用：获取下载失败原因。
+
+类型：string 类型
+
+示例：
+```cpp
+if (!result.ok())
+{
+    cerr << result.error_message;
+}
+```
 ---
 
 <h3 align="center">FeatherCrawl —— 让 C++ 爬虫变得简单而强大。</h3>
