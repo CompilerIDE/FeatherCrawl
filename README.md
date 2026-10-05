@@ -32,7 +32,7 @@ FeatherCrawl 是单头文件库，但**依赖系统或第三方库**，编译时
 | 平台 | 编译要求 |
 |------|---------|
 | Windows / MSVC | 直接编译即可，头文件通过 `#pragma comment(lib, ...)` 自动链接 `winhttp.lib`（启用 WebView2 时还会自动链接 `user32.lib`、`advapi32.lib`） |
-| Windows / MinGW / TDM-GCC | 需添加 `-lwinhttp`；`#pragma comment(lib, ...)` 在 GCC 系下不生效，需手动链接 |
+| Windows / MinGW / TDM-GCC | 需添加 `-lwinhttp` |
 | Linux | 需添加 `-lssl -lcrypto -pthread`（部分发行版若使用 iconv 还需 `-liconv`） |
 
 ---
