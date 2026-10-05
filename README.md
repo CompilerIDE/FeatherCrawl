@@ -10,16 +10,39 @@
   <br>
 </p>
 
-FeatherCrawl 是一个轻量级 C++ 网络请求库。仅需一个头文件，即可在 C++ 中完成 HTTP 请求、网页抓取、文件下载、Cookie 管理与可选的 WebView2 渲染。
+FeatherCrawl 是一个轻量级 C++ 网络请求库，采用单头文件形式，接口使用简单；但**不同平台仍需要链接对应的系统库或依赖库**，编译前请确认链接参数（详见下文“特性”与“平台依赖”说明）。
 
 ---
 
 # 特性
 
-- 架构：Windows 平台使用 WinHTTP（可选 Microsoft Edge WebView2 渲染），Linux 平台使用 Socket API + OpenSSL
+- 架构：
+  - Windows：使用 WinHTTP 实现 HTTP 通信，可选 Microsoft Edge WebView2 渲染
+  - Linux：**基于 Socket API 实现 HTTP/TCP 通信，并使用 OpenSSL 提供 HTTPS/TLS 支持**（Socket 负责 TCP 层，OpenSSL 负责 TLS 层，两者不是替代关系）
 - 调用简单，仅需 `#include <feathercrawl.h>`
 - C++11 及以上，支持在 Windows 10/11、Linux 上运行
 - 内建 Cookie 管理、重定向、重试、超时、下载进度、字符集自动识别等能力
+
+---
+
+# 平台依赖与编译
+
+FeatherCrawl 是单头文件库，但**依赖系统或第三方库**，编译时需要显式链接：
+
+| 平台 | 编译要求 |
+|------|---------|
+| Windows / MSVC | 直接编译即可，头文件通过 `#pragma comment(lib, ...)` 自动链接 `winhttp.lib`（启用 WebView2 时还会自动链接 `user32.lib`、`advapi32.lib`） |
+| Windows / MinGW / TDM-GCC | 需添加 `-lwinhttp`；`#pragma comment(lib, ...)` 在 GCC 系下不生效，需手动链接 |
+| Linux | 需添加 `-lssl -lcrypto -pthread`（部分发行版若使用 iconv 还需 `-liconv`） |
+
+---
+
+# 版本与兼容性
+
+- 当前版本标记：`FeatherCrawl/2.0`（体现在默认 User-Agent 中）
+- 最近更新：2026-09-25
+- 语言标准：C++11 及以上
+- 支持平台：Windows 10/11、Linux
 
 ---
 
@@ -54,6 +77,8 @@ int main()
 }
 ```
 
+> 提醒：Linux 下必须链接 `-lssl -lcrypto -pthread`；Windows / MinGW 必须链接 `-lwinhttp`。否则会出现链接错误。
+
 ## 1.2 三个核心对象
 
 | 对象 | 作用 |
@@ -67,7 +92,20 @@ int main()
 > - `Headers::fields` 是 `std::unordered_map<std::string, std::string>`
 > - `ResponseHeaders::fields` 是 `std::unordered_map<std::string, std::vector<std::string>>`
 >
-> `Session` 相关接口使用 `Headers`，`Response::headers` 是 `ResponseHeaders`，两者用途不同，不要混用。
+> `Session` 相关接口使用 `Headers`，`Response::headers` 是 `ResponseHeaders`，两者用途不同，**不能相互赋值**：
+
+示例：
+```cpp
+web::Response r = session.get(url);
+web::Headers h;
+for (auto& kv : r.headers.fields)
+{
+    if (!kv.second.empty())
+    {
+        h.set(kv.first, kv.second.front());
+    }
+}
+```
 
 ---
 
@@ -88,14 +126,14 @@ web::set_default_language("zh_CN");
 web::Session a;               // a 使用 zh_CN
 
 web::set_default_language("en_US");
-web::Session b;               // b 使用 en_US
-                              // a 仍然是 zh_CN，不受影响
+web::Session b;               // b 使用 en_US，a 仍然是 zh_CN，不受影响
 ```
 
 ## 2.2 `web::set_language(lang)`
 
 作用：与 `web::set_default_language` 等价，设置全局默认语言，只影响之后创建的 Session。
 
+示例：
 ```cpp
 web::set_language("zh_CN");
 ```
@@ -106,6 +144,7 @@ web::set_language("zh_CN");
 
 参数：`std::string`。
 
+示例：
 ```cpp
 web::Session session;
 session.set_language("zh_CN");
@@ -118,10 +157,10 @@ session.set_language("zh_CN");
 返回值：`std::string`，值为 `"zh_CN"` 或 `"en_US"`。
 
 继承规则：
-
 - Session 在**构造时**拷贝一份全局默认语言，之后不再随全局默认语言变化；
 - 若之后调用过 `Session::set_language()`，则以最后一次设置值为准。
 
+示例：
 ```cpp
 web::set_default_language("zh_CN");
 web::Session s;                         // s.language() == "zh_CN"
@@ -129,10 +168,6 @@ web::Session s;                         // s.language() == "zh_CN"
 web::set_default_language("en_US");
 cout << s.language() << endl;           // 仍为 zh_CN
 ```
-
-## 2.5 一个已知细节
-
-`Session::error_message()` 在 Windows 端若会话初始化失败，可能会直接返回初始化时生成的错误信息，而**不进入会话语言上下文**。也就是说，此时错误信息语言可能不等于 `Session::set_language()` 设定的语言。
 
 ---
 
@@ -148,6 +183,7 @@ cout << s.language() << endl;           // 仍为 zh_CN
 
 参数：`key` 与 `value`。`key` 代表请求头的名字，例如 `User-Agent`；`value` 代表请求头的值。
 
+示例：
 ```cpp
 web::Headers headers;
 headers.set("Content-Type", "application/json");
@@ -161,6 +197,7 @@ headers.set("User-Agent", "Crawler/1.0");
 
 返回：`std::string`，不存在时返回空串。
 
+示例：
 ```cpp
 string key = headers.get("content-type");
 ```
@@ -171,6 +208,7 @@ string key = headers.get("content-type");
 
 返回：`bool`。
 
+示例：
 ```cpp
 if (headers.contains("Authorization")) { /* ... */ }
 ```
@@ -179,6 +217,7 @@ if (headers.contains("Authorization")) { /* ... */ }
 
 作用：删除指定请求头。
 
+示例：
 ```cpp
 headers.erase("Cookie");
 ```
@@ -187,6 +226,7 @@ headers.erase("Cookie");
 
 作用：清除所有请求头。
 
+示例：
 ```cpp
 headers.clear();
 ```
@@ -197,11 +237,7 @@ headers.clear();
 
 返回：`std::string`。
 
-平台差异：
-
-- Windows 端用于提交给 WinHTTP 的追加头字符串。
-- Linux 端提供该接口保持兼容，但 Linux 内部实现**并未调用它**，而是直接遍历 `headers.fields` 拼接请求。
-
+示例：
 ```cpp
 string text = headers.to_winhttp_string();
 ```
@@ -228,8 +264,9 @@ web::Response r = session.get(url);
 
 作用：判断请求是否成功。
 
-返回：`bool`（`true` 表示请求成功且状态码在 `200`–`299` 之间）。
+返回：`bool`。
 
+示例：
 ```cpp
 web::Response r = session.get("https://example.com");
 if (r.ok())
@@ -246,7 +283,7 @@ else
 
 作用：获取 HTTP 状态码。
 
-返回：`int` 类型。
+返回：`int`。
 
 常见值：
 
@@ -260,6 +297,7 @@ else
 | 404 | 不存在 |
 | 500 | 服务器错误 |
 
+示例：
 ```cpp
 web::Response r = session.get("https://example.com");
 cout << r.status_code;
@@ -271,6 +309,7 @@ cout << r.status_code;
 
 类型：`std::string`。
 
+示例：
 ```cpp
 web::Response r = session.get("https://example.com");
 cout << r.body;
@@ -282,6 +321,7 @@ cout << r.body;
 
 类型：`ResponseHeaders`。
 
+示例：
 ```cpp
 web::Response r = session.get("https://example.com");
 string type = r.headers.get("Content-Type");
@@ -300,8 +340,7 @@ string type = r.headers.get("Content-Type");
 
 作用：获取错误类型。
 
-类型：`ErrorCode` 枚举。
-
+示例：
 ```cpp
 if (!r.ok())
 {
@@ -315,6 +354,7 @@ if (!r.ok())
 
 类型：`std::string`。
 
+示例：
 ```cpp
 if (!r.ok())
 {
@@ -328,6 +368,7 @@ if (!r.ok())
 
 类型：`std::wstring`。
 
+示例：
 ```cpp
 web::Response r = session.get("https://example.com");
 std::wcout << r.final_url << std::endl;
@@ -339,6 +380,7 @@ std::wcout << r.final_url << std::endl;
 
 类型：`size_t`。
 
+示例：
 ```cpp
 cout << r.received_bytes << " bytes";
 ```
@@ -349,6 +391,7 @@ cout << r.received_bytes << " bytes";
 
 类型：`int`。
 
+示例：
 ```cpp
 cout << "请求次数:" << r.attempts;
 ```
@@ -359,6 +402,7 @@ cout << "请求次数:" << r.attempts;
 
 类型：`int`。
 
+示例：
 ```cpp
 cout << r.redirect_count;
 ```
@@ -371,6 +415,7 @@ cout << r.redirect_count;
 
 作用：创建一个默认网络会话。
 
+示例：
 ```cpp
 web::Session session;
 ```
@@ -381,6 +426,7 @@ web::Session session;
 
 参数：`SessionOptions`。
 
+示例：
 ```cpp
 web::SessionOptions opt;
 opt.user_agent = L"MyCrawler/1.0";
@@ -399,6 +445,7 @@ web::Session session(opt);
 
 返回：`Response`。
 
+示例：
 ```cpp
 web::Session session;
 web::Response r = session.get("https://example.com");
@@ -408,6 +455,7 @@ web::Response r = session.get("https://example.com");
 
 作用：带请求头发送 GET。
 
+示例：
 ```cpp
 web::Session session;
 web::Headers h;
@@ -427,6 +475,7 @@ web::Response r = session.get("https://example.com", h);
 | headers | `Headers` |
 | options | `RequestOptions` |
 
+示例：
 ```cpp
 web::Session session;
 web::RequestOptions opt;
@@ -450,32 +499,21 @@ web::Response r = session.get("https://example.com", web::Headers(), opt);
 
 返回：`Response`。
 
-`post()` 提供多个重载，可以像 `get()` 一样带请求头和 `RequestOptions`：
+`post()` 提供多个重载，可以像 `get()` 一样带请求头和 `RequestOptions`。
 
+示例：
 ```cpp
 web::Session session;
 
 // 简单形式
-web::Response r1 = session.post(
-    "https://example.com/api",
-    R"({"id":1})",
-    "application/json"
-);
+web::Response r1 = session.post("https://example.com/api", R"({"id":1})", "application/json");
 
-// 带请求头和 RequestOptions 的完整形式
+// 完整形式
 web::Headers h;
 h.set("Authorization", "Bearer 123456");
-
 web::RequestOptions opt;
 opt.timeout_ms = 8000;
-
-web::Response r2 = session.post(
-    "https://example.com/api",
-    R"({"id":1})",
-    "application/json",
-    h,
-    opt
-);
+web::Response r2 = session.post("https://example.com/api", R"({"id":1})", "application/json", h, opt);
 ```
 
 ## 5.7 `cookie_jar()`
@@ -484,6 +522,7 @@ web::Response r2 = session.post(
 
 返回：`CookieJar&`。
 
+示例：
 ```cpp
 web::Session s;
 auto& jar = s.cookie_jar();
@@ -496,6 +535,7 @@ cout << jar.size();
 
 参数：`std::string`。
 
+示例：
 ```cpp
 web::Session s;
 s.set_language("zh_CN");
@@ -507,6 +547,7 @@ s.set_language("zh_CN");
 
 返回：`std::string`。
 
+示例：
 ```cpp
 web::Session s;
 cout << s.language();
@@ -516,38 +557,9 @@ cout << s.language();
 
 作用：清除当前 Session 保存的 Cookie。
 
+示例：
 ```cpp
 session.clear_cookies();
-```
-
-## 5.11 其他会话方法
-
-| 方法 | 作用 |
-|------|------|
-| `bool valid()` | 检查会话是否可用 |
-| `std::string error_message()` | 获取会话初始化错误信息 |
-| `bool delete_cookie(name, domain, path)` | 删除指定 Cookie |
-| `size_t clear_cookies_for_domain(domain)` | 清除某个域下的全部 Cookie |
-| `size_t cookie_count()` | 返回 Cookie 数量 |
-| `void set_cookies_enabled(bool enabled, bool clear_when_disabled = true)` | 启用或禁用 Cookie |
-| `bool cookies_enabled() const` | 返回是否启用 Cookie |
-| `size_t connection_count()` | 返回连接池中的连接数（**Linux 端恒为 0**，因为 Linux 端每次请求新建连接，无连接池） |
-| `void set_proxy(proxy, bypass = "")` | 设置代理 |
-
-### 关于 `set_proxy`
-
-签名是：
-
-```cpp
-void set_proxy(const std::string& proxy, const std::string& bypass = "");
-```
-
-两个参数都是 **`std::string`**（Windows 端内部按 UTF-8 转换到宽字符），**不是 `std::wstring`**。这与 `SessionOptions::proxy`（`std::wstring`）不同，使用时请注意区分。
-
-```cpp
-web::Session s;
-s.set_proxy("http://127.0.0.1:7890");                 // 正确：std::string
-// s.set_proxy(L"http://127.0.0.1:7890");             // 错误：不能传 wstring
 ```
 
 ---
@@ -563,13 +575,7 @@ s.set_proxy("http://127.0.0.1:7890");                 // 正确：std::string
 - 单次请求最大响应大小
 - 重试策略
 
-> 关于 `max_response_size` 的继承规则：
-> `RequestOptions::max_response_size` 与 `SessionOptions::max_response_size` 的关系是：
-> **当 `RequestOptions::max_response_size == 0`（默认值）时，使用 `SessionOptions::max_response_size`**；
-> 只有当 `RequestOptions::max_response_size` 显式设为一个非 0 值时，才使用该次请求的值。
-
 示例：
-
 ```cpp
 web::RequestOptions options;
 options.timeout_ms = 5000;
@@ -584,11 +590,7 @@ web::Response r = session.get("https://example.com", web::Headers(), options);
 
 类型：`int`。
 
-`0` 表示**不显式设置超时**，具体行为平台相关：
-
-- Windows：`WinHttpSetTimeouts` 只在 `timeout_ms > 0` 时调用，否则走 WinHTTP 默认行为。
-- Linux：连接阶段 `poll` 默认约 30 秒；读写阶段不会设置 `SO_RCVTIMEO` / `SO_SNDTIMEO`，因此行为取决于系统 TCP 栈。
-
+示例：
 ```cpp
 web::RequestOptions opt;
 opt.timeout_ms = 10000;
@@ -600,6 +602,7 @@ opt.timeout_ms = 10000;
 
 类型：`bool`，默认 `true`。
 
+示例：
 ```cpp
 web::RequestOptions opt;
 opt.follow_redirect = true;
@@ -609,8 +612,9 @@ opt.follow_redirect = true;
 
 作用：设置最大重定向次数。
 
-类型：`int`，默认 `-1`（回落为 `SessionOptions::max_redirects`，其默认值为 `10`）。
+类型：`int`，默认 `-1`。
 
+示例：
 ```cpp
 web::RequestOptions opt;
 opt.max_redirects = 10;
@@ -618,28 +622,25 @@ opt.max_redirects = 10;
 
 ## 6.4 `max_response_size`
 
-作用：**单次请求**限制服务器返回数据大小。
+作用：**单次请求**限制服务器返回数据大小（仅内存读取路径）。
 
 单位：字节。默认 `0`。
 
-类型：`size_t`。
+类型：`size_t`。当值为 `0` 时，使用 `SessionOptions::max_response_size`（默认 64 MiB）。
 
-当值为 `0` 时，使用 `SessionOptions::max_response_size`（默认 64 MiB）。
-
+示例：
 ```cpp
 web::RequestOptions opt;
 opt.max_response_size = 1024 * 1024; // 最大 1 MiB
 ```
-
-超过限制时，请求失败。
-
-> 注意：`RequestOptions::max_response_size` 在**下载路径中基本不生效**，下载大小限制请使用 `DownloadOptions::max_file_size`。
 
 ## 6.5 `retry`
 
 作用：设置自动重试策略。
 
 类型：`RetryPolicy`。
+
+示例：
 
 ```cpp
 web::RequestOptions opt;
@@ -677,6 +678,8 @@ opt.retry.retries = 3;
 
 类型：`int`。
 
+示例：
+
 ```cpp
 web::RequestOptions opt;
 opt.retry.retries = 5;
@@ -688,6 +691,8 @@ opt.retry.retries = 5;
 
 单位：毫秒。
 
+示例：
+
 ```cpp
 opt.retry.initial_delay_ms = 500;
 ```
@@ -695,6 +700,8 @@ opt.retry.initial_delay_ms = 500;
 ## 7.3 `max_delay_ms`
 
 作用：限制最大等待时间。
+
+示例：
 
 ```cpp
 opt.retry.max_delay_ms = 5000;
@@ -706,13 +713,11 @@ opt.retry.max_delay_ms = 5000;
 
 类型：`double`。
 
+示例：
+
 ```cpp
 opt.retry.multiplier = 2.0;
 ```
-
-## 7.5 其他重试字段
-
-见上文表格中的 `jitter`、`respect_retry_after`、`retry_non_idempotent`、`allow_automatic_authentication`。
 
 ---
 
@@ -728,11 +733,17 @@ Cookie 保存在**内存**中，仅在 Session 生命周期内有效，**不会�
 Session::cookie_jar()
 ```
 
+> **线程安全提示**：
+> `CookieJar` 内部虽然对自身操作加了互斥锁，但**整个 `Session` 并不适合多线程并发使用**。
+> 建议同一个 `Session` 只在一个线程中操作，或给每个线程分配独立的 `Session`。详见 5.12 节。
+
 ## 8.1 `size()`
 
 作用：返回 Cookie 数量。
 
 返回：`size_t`。
+
+示例：
 
 ```cpp
 web::Session session;
@@ -744,6 +755,8 @@ cout << count;
 ## 8.2 `clear()`
 
 作用：清空所有 Cookie。
+
+示例：
 
 ```cpp
 session.cookie_jar().clear();
@@ -761,6 +774,8 @@ session.clear_cookies();
 
 参数 `name` 类型：`std::string`。
 
+示例：
+
 ```cpp
 session.cookie_jar().delete_cookie("sessionid");
 ```
@@ -775,15 +790,11 @@ session.delete_cookie("sessionid");
 
 Session 默认会保存服务器返回的 Cookie。
 
+示例：
+
 ```cpp
 web::Session session;
-// 登录
-session.post(
-    "https://example.com/login",
-    "user=test",
-    "application/x-www-form-urlencoded"
-);
-// 后续请求自动携带 Cookie
+session.post("https://example.com/login", "user=test", "application/x-www-form-urlencoded");
 web::Response r = session.get("https://example.com/user");
 ```
 
@@ -792,6 +803,8 @@ web::Response r = session.get("https://example.com/user");
 # 九、会话配置
 
 `web::SessionOptions` 用于创建 Session 时设置默认行为。
+
+示例：
 
 ```cpp
 web::SessionOptions opt;
@@ -817,6 +830,8 @@ web::Session session(opt);
 
 类型：`std::wstring`。
 
+示例：
+
 ```cpp
 web::SessionOptions opt;
 opt.user_agent = L"MyCrawler/1.0";
@@ -829,6 +844,8 @@ web::Session s(opt);
 
 类型：`bool`。
 
+示例：
+
 ```cpp
 web::SessionOptions opt;
 opt.enable_cookies = true;
@@ -840,7 +857,7 @@ opt.enable_cookies = true;
 
 类型：`std::wstring`。
 
-> 注意：`SessionOptions::proxy` 是 `std::wstring`，而 `Session::set_proxy()` 的参数是 `std::string`，二者不同。
+示例：
 
 ```cpp
 web::SessionOptions opt;
@@ -853,6 +870,8 @@ web::Session s(opt);
 作用：设置会话默认最大响应大小。
 
 类型：`size_t`。默认 64 MiB（`64ULL * 1024ULL * 1024ULL`）。
+
+示例：
 
 ```cpp
 web::SessionOptions opt;
@@ -879,7 +898,7 @@ FeatherCrawl 提供专用下载接口，用于：
 | `download()` | 执行下载 |
 
 > **下载文件大小限制使用 `DownloadOptions::max_file_size`**。
-> `DownloadOptions::request.max_response_size` 在下载路径中**不会**被用于限制文件大小，请勿混淆。
+> `DownloadOptions::request.max_response_size` 在下载路径中**不会**被用于限制文件大小，请勿混淆（交叉参见 6.4 节）。
 
 ## 10.1 `download(url, filename, headers, options)`
 
@@ -928,18 +947,7 @@ int main()
 如果不需要自定义请求头，可以只传前两个参数：
 
 ```cpp
-web::DownloadResult r = session.download(
-    "https://example.com/test.zip",
-    "test.zip"
-);
-```
-
-> 注意：`DownloadOptions::overwrite` 默认为 `false`。如果目标文件已存在，下载会失败并返回 `ErrorCode::FileExists`。
-> 如果需要覆盖，请设置：
-
-```cpp
-web::DownloadOptions opt;
-opt.overwrite = true;
+web::DownloadResult r = session.download("https://example.com/test.zip", "test.zip");
 ```
 
 ---
@@ -953,6 +961,8 @@ opt.overwrite = true;
 作用：是否显示下载进度。
 
 类型：`bool`，默认 `true`。
+
+示例：
 
 ```cpp
 web::DownloadOptions opt;
@@ -968,6 +978,9 @@ opt.show_progress = true;
 类型：`int`。
 
 > 注意：`timeout_ms` 位于 `DownloadOptions::request` 子对象中，而不是直接挂在 `DownloadOptions` 上。
+> 与 6.1 节一致，下载场景同样**强烈建议显式设置超时**。
+
+示例：
 
 ```cpp
 web::DownloadOptions opt;
@@ -979,6 +992,8 @@ opt.request.timeout_ms = 30000;
 作用：是否覆盖已有文件。
 
 类型：`bool`，默认 `false`。
+
+示例：
 
 ```cpp
 web::DownloadOptions opt;
@@ -992,6 +1007,8 @@ opt.overwrite = true;
 类型：`RetryPolicy`。
 
 > 注意：`retry` 位于 `DownloadOptions::request` 子对象中，而不是直接挂在 `DownloadOptions` 上。
+
+示例：
 
 ```cpp
 web::DownloadOptions opt;
@@ -1018,6 +1035,8 @@ opt.request.retry.retries = 5;
 
 返回：`bool`。
 
+示例：
+
 ```cpp
 if (result.ok())
 {
@@ -1031,6 +1050,8 @@ if (result.ok())
 
 类型：`uint64_t`。
 
+示例：
+
 ```cpp
 cout << result.bytes_written;
 ```
@@ -1040,6 +1061,8 @@ cout << result.bytes_written;
 作用：文件总大小。
 
 类型：`uint64_t`。
+
+示例：
 
 ```cpp
 cout << result.file_size;
@@ -1051,6 +1074,8 @@ cout << result.file_size;
 
 类型：`std::wstring`。
 
+示例：
+
 ```cpp
 std::wcout << result.destination << std::endl;
 ```
@@ -1060,6 +1085,8 @@ std::wcout << result.destination << std::endl;
 作用：获取下载失败原因。
 
 类型：`std::string`。
+
+示例：
 
 ```cpp
 if (!result.ok())
@@ -1116,6 +1143,8 @@ FeatherCrawl 还提供了一些便捷工具函数。
 
 作用：将指定代码页的字符串转换为 UTF-8。
 
+示例：
+
 ```cpp
 std::string utf8 = web::to_utf8(gbk_text, 936);
 ```
@@ -1123,6 +1152,8 @@ std::string utf8 = web::to_utf8(gbk_text, 936);
 ## 14.2 `web::to_utf8(src, encoding)`
 
 作用：将指定编码名的字符串转换为 UTF-8。
+
+示例：
 
 ```cpp
 std::string utf8 = web::to_utf8(gbk_text, "GBK");
@@ -1132,6 +1163,8 @@ std::string utf8 = web::to_utf8(gbk_text, "GBK");
 
 作用：将字节数格式化为可读字符串。
 
+示例：
+
 ```cpp
 cout << web::text_size(1024 * 1024); // 1.00 MB
 ```
@@ -1140,6 +1173,8 @@ cout << web::text_size(1024 * 1024); // 1.00 MB
 
 作用：按索引截取字符串（包含 `start` 和 `end`）。
 
+示例：
+
 ```cpp
 std::string part = web::substring("Hello World", 0, 4); // "Hello"
 ```
@@ -1147,6 +1182,8 @@ std::string part = web::substring("Hello World", 0, 4); // "Hello"
 ## 14.5 `web::lines(str, start_line, end_line)`
 
 作用：按行截取字符串，行号从 1 开始。
+
+示例：
 
 ```cpp
 std::string part = web::lines("a\nb\nc", 2, 3); // "b\nc"
@@ -1171,6 +1208,8 @@ std::string part = web::lines("a\nb\nc", 2, 3); // "b\nc"
 
 返回：`bool`。
 
+示例：
+
 ```cpp
 if (web::webview2_available())
 {
@@ -1184,6 +1223,8 @@ if (web::webview2_available())
 
 返回：`std::wstring`。
 
+示例：
+
 ```cpp
 std::wstring version = web::webview2_runtime_version();
 std::wcout << version << std::endl;
@@ -1192,6 +1233,8 @@ std::wcout << version << std::endl;
 ## 15.3 `browse(url, options)`
 
 作用：打开一个窗口浏览指定 URL。**阻塞到窗口关闭后返回。**
+
+示例：
 
 ```cpp
 web::BrowserOptions opt;
@@ -1211,6 +1254,8 @@ if (!r.ok())
 作用：渲染一段 HTML 字符串。**阻塞到窗口关闭后返回。**
 
 大小限制：约 2 MiB（UTF-8 形式 `> 2 * 1024 * 1024`；宽字符形式 `> (2 * 1024 * 1024) / sizeof(wchar_t)`）。
+
+示例：
 
 ```cpp
 web::BrowserResult r = web::render_html("<h1>Hello</h1>");
@@ -1312,6 +1357,10 @@ A：不能。macOS 不是“未支持”，而是**包含头文件会直接 `#er
 **Q11：`browse()` / `render_html()` 会卡住主线程吗？**
 
 A：会。这两个函数在 Windows 端会进入消息循环，**阻塞当前线程直到窗口关闭**。如需并发请放到独立线程中调用。
+
+**Q12：同一个 `Session` 可以在多个线程中同时使用吗？**
+
+A：不建议。`Session` 不是为多线程并发设计的，同时发起多个请求或同时修改状态属于未定义行为。请为每个线程分配独立的 `Session`。详见 5.12 节。
 
 ---
 
