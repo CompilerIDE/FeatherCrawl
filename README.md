@@ -977,9 +977,6 @@ opt.show_progress = true;
 
 类型：`int`。
 
-> 注意：`timeout_ms` 位于 `DownloadOptions::request` 子对象中，而不是直接挂在 `DownloadOptions` 上。
-> 与 6.1 节一致，下载场景同样**强烈建议显式设置超时**。
-
 示例：
 
 ```cpp
@@ -1005,8 +1002,6 @@ opt.overwrite = true;
 作用：设置下载失败重试。
 
 类型：`RetryPolicy`。
-
-> 注意：`retry` 位于 `DownloadOptions::request` 子对象中，而不是直接挂在 `DownloadOptions` 上。
 
 示例：
 
@@ -1110,36 +1105,11 @@ if (!result.ok())
 
 ---
 
-# 十三、HTTPS 说明
-
-FeatherCrawl 在 Windows 平台通过 WinHTTP、Linux 平台通过 OpenSSL 自动处理 HTTPS。
-
-- **证书校验默认开启**：Linux 端使用 `SSL_VERIFY_PEER` 并加载系统 CA 证书（通过 `SSL_CTX_set_default_verify_paths`）。
-- **SNI 自动发送**：对域名目标自动设置 `SSL_set_tlsext_host_name`，对 IP 目标自动使用 `X509_VERIFY_PARAM_set1_ip_asc`。
-- **不提供“跳过证书校验”开关**：当前版本没有暴露关闭证书校验的配置项。如遇证书错误（返回 `ErrorCode::TlsFailure`），应检查系统时间、系统 CA 是否完整，而不是绕过校验。
-
-HTTPS 请求示例：
-
-```cpp
-web::Session session;
-web::Response r = session.get("https://example.com");
-if (r.ok())
-{
-    cout << r.body << endl;
-}
-else
-{
-    cerr << r.error_message << endl;
-}
-```
-
----
-
-# 十四、工具函数
+# 十三、工具函数
 
 FeatherCrawl 还提供了一些便捷工具函数。
 
-## 14.1 `web::to_utf8(src, codepage)`
+## 13.1 `web::to_utf8(src, codepage)`
 
 作用：将指定代码页的字符串转换为 UTF-8。
 
@@ -1149,7 +1119,7 @@ FeatherCrawl 还提供了一些便捷工具函数。
 std::string utf8 = web::to_utf8(gbk_text, 936);
 ```
 
-## 14.2 `web::to_utf8(src, encoding)`
+## 13.2 `web::to_utf8(src, encoding)`
 
 作用：将指定编码名的字符串转换为 UTF-8。
 
@@ -1159,7 +1129,7 @@ std::string utf8 = web::to_utf8(gbk_text, 936);
 std::string utf8 = web::to_utf8(gbk_text, "GBK");
 ```
 
-## 14.3 `web::text_size(bytes, unit)`
+## 13.3 `web::text_size(bytes, unit)`
 
 作用：将字节数格式化为可读字符串。
 
@@ -1169,7 +1139,7 @@ std::string utf8 = web::to_utf8(gbk_text, "GBK");
 cout << web::text_size(1024 * 1024); // 1.00 MB
 ```
 
-## 14.4 `web::substring(str, start, end)`
+## 13.4 `web::substring(str, start, end)`
 
 作用：按索引截取字符串（包含 `start` 和 `end`）。
 
@@ -1179,7 +1149,7 @@ cout << web::text_size(1024 * 1024); // 1.00 MB
 std::string part = web::substring("Hello World", 0, 4); // "Hello"
 ```
 
-## 14.5 `web::lines(str, start_line, end_line)`
+## 13.5 `web::lines(str, start_line, end_line)`
 
 作用：按行截取字符串，行号从 1 开始。
 
@@ -1191,18 +1161,15 @@ std::string part = web::lines("a\nb\nc", 2, 3); // "b\nc"
 
 ---
 
-# 十五、浏览器与 HTML 渲染（仅 Windows）
+# 十四、浏览器与 HTML 渲染（仅 Windows）
 
 在 Windows 平台上，FeatherCrawl 可选支持 Microsoft Edge WebView2，用于打开网页或渲染 HTML。
 
 > **平台限制**：`browse()` 与 `render_html()` 只在 **Windows** 平台上真正实现。
->
-> - Linux：调用返回 `BrowserErrorCode::UnsupportedPlatform`，`webview2_available()` 恒为 `false`，`webview2_runtime_version()` 返回空字符串。
-> - macOS：不支持，且头文件本身会 `#error`，无法编译。
 
 > **阻塞语义**：`browse()` 与 `render_html()` 在 Windows 端会创建窗口并进入消息循环，**阻塞当前线程直到窗口关闭才返回**。如需并发，请放到独立线程中调用。
 
-## 15.1 `webview2_available()`
+## 14.1 `webview2_available()`
 
 作用：检查当前环境是否可用 WebView2。
 
@@ -1217,7 +1184,7 @@ if (web::webview2_available())
 }
 ```
 
-## 15.2 `webview2_runtime_version()`
+## 14.2 `webview2_runtime_version()`
 
 作用：获取 WebView2 运行时版本。
 
@@ -1230,7 +1197,7 @@ std::wstring version = web::webview2_runtime_version();
 std::wcout << version << std::endl;
 ```
 
-## 15.3 `browse(url, options)`
+## 14.3 `browse(url, options)`
 
 作用：打开一个窗口浏览指定 URL。**阻塞到窗口关闭后返回。**
 
@@ -1249,11 +1216,11 @@ if (!r.ok())
 }
 ```
 
-## 15.4 `render_html(html, options)`
+## 14.4 `render_html(html, options)`
 
 作用：渲染一段 HTML 字符串。**阻塞到窗口关闭后返回。**
 
-大小限制：约 2 MiB（UTF-8 形式 `> 2 * 1024 * 1024`；宽字符形式 `> (2 * 1024 * 1024) / sizeof(wchar_t)`）。
+大小限制：约 2 MiB。
 
 示例：
 
@@ -1265,7 +1232,7 @@ if (!r.ok())
 }
 ```
 
-## 15.5 `BrowserOptions`
+## 14.5 `BrowserOptions`
 
 | 字段 | 类型 | 默认值 | 作用 |
 |------|------|--------|------|
@@ -1281,7 +1248,7 @@ if (!r.ok())
 | `user_data_folder` | `std::wstring` | 空 | 用户数据目录。**为空时库会创建临时目录，并在窗口关闭后自动清理** |
 | `browser_executable_folder` | `std::wstring` | 空 | 浏览器可执行文件目录 |
 
-## 15.6 `BrowserResult`
+## 14.6 `BrowserResult`
 
 | 字段 | 类型 | 作用 |
 |------|------|------|
@@ -1294,7 +1261,7 @@ if (!r.ok())
 
 ---
 
-# 十六、常见问题（FAQ）
+# 十五、常见问题（FAQ）
 
 **Q1：Linux 编译失败，提示找不到 OpenSSL 符号？**
 
@@ -1360,7 +1327,7 @@ A：会。这两个函数在 Windows 端会进入消息循环，**阻塞当前�
 
 **Q12：同一个 `Session` 可以在多个线程中同时使用吗？**
 
-A：不建议。`Session` 不是为多线程并发设计的，同时发起多个请求或同时修改状态属于未定义行为。请为每个线程分配独立的 `Session`。详见 5.12 节。
+A：不建议。`Session` 不是为多线程并发设计的，同时发起多个请求或同时修改状态属于未定义行为。请为每个线程分配独立的 `Session`。
 
 ---
 
